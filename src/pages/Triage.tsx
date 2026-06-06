@@ -32,7 +32,7 @@ const grupos = [
   },
 ];
 
-function Home() {
+function Triage() {
   const [patientData, setPatientData] = useState<PatientData>({
     idade: "",
     sexo: "",
@@ -111,4 +111,4 @@ function Home() {
   );
 }
 
-export default Home;
+export default Triage;
