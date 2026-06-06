@@ -4,9 +4,9 @@
 
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background: #f2f6f5;
-  color: #1f2933;
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  background: linear-gradient(135deg, #e0f2fe, #f0fdf4);
+  color: #1f2937;
 }
 
 .container {
@@ -18,77 +18,257 @@ body {
 
 .card {
   width: 100%;
-  max-width: 760px;
-  background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  max-width: 820px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 36px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
+  border: 1px solid #e5e7eb;
 }
 
 h1 {
   margin-top: 0;
+  margin-bottom: 12px;
   color: #0f766e;
+  font-size: 36px;
+  text-align: center;
+}
+
+.card > p {
+  text-align: center;
+  color: #64748b;
+  font-size: 17px;
+  line-height: 1.6;
+  margin-bottom: 28px;
 }
 
 .checkbox-list {
   display: grid;
-  gap: 12px;
-  margin: 24px 0;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin: 28px 0;
 }
 
 .checkbox-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background: #f8fafc;
-  padding: 12px;
-  border-radius: 10px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
   cursor: pointer;
+  transition: 0.2s ease;
+  font-size: 15px;
+}
+
+.checkbox-item:hover {
+  background: #ecfeff;
+  border-color: #14b8a6;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.12);
 }
 
 .checkbox-item input {
-  width: 18px;
-  height: 18px;
-}
-.resultado h2 {
-  color: #000000;
+  width: 19px;
+  height: 19px;
+  accent-color: #0f766e;
+  cursor: pointer;
 }
 
 .resultado {
-  
-  margin-top: 24px;
-  padding: 20px;
-  border-radius: 12px;
-  border-left: 6px solid #94a3b8;
+  margin-top: 30px;
+  padding: 26px;
+  border-radius: 20px;
+  border-left: 8px solid #94a3b8;
   background: #f8fafc;
-}
-
-.resultado-baixa {
-  border-left-color: #22c55e;
-  background: #f0fdf4;
-}
-
-.resultado-moderada {
-  border-left-color: #facc15;
-  background: #fefce8;
-}
-
-.resultado-alta {
-  border-left-color: #f97316;
-  background: #fff7ed;
-}
-
-.resultado-alerta {
-  border-left-color: #dc2626;
-  background: #fef2f2;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
 .resultado h2 {
   margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 26px;
 }
 
-small {
+.resultado p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.resultado small {
   display: block;
-  margin-top: 12px;
+  margin-top: 16px;
   color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Baixa suspeita */
+.resultado-baixa {
+  border-left-color: #22c55e;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+}
+
+.resultado-baixa h2 {
+  color: #15803d;
+}
+
+/* Suspeita moderada */
+.resultado-moderada {
+  border-left-color: #facc15;
+  background: linear-gradient(135deg, #fefce8, #fef9c3);
+}
+
+.resultado-moderada h2 {
+  color: #a16207;
+}
+
+/* Alta suspeita */
+.resultado-alta {
+  border-left-color: #f97316;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+}
+
+.resultado-alta h2 {
+  color: #c2410c;
+}
+
+/* Alerta de dengue grave */
+.resultado-alerta {
+  border-left-color: #dc2626;
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border: 1px solid #fecaca;
+}
+
+.resultado-alerta h2 {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.resultado-alerta::before {
+  content: "⚠️ Atenção";
+  display: inline-block;
+  background: #dc2626;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+/* Responsivo para celular */
+@media (max-width: 700px) {
+  .card {
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 28px;
+  }
+
+  .checkbox-list {
+    grid-template-columns: 1fr;
+  }
+
+  .resultado h2 {
+    font-size: 22px;
+  }
+} 
+
+.grupo-sintomas {
+  margin-top: 32px;
+}
+
+.grupo-sintomas h2 {
+  font-size: 22px;
+  color: #0f766e;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #ccfbf1;
+}
+
+.resultado-grave {
+  border-left-color: #7f1d1d;
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border: 1px solid #fca5a5;
+}
+
+.resultado-grave h2 {
+  color: #7f1d1d;
+  font-weight: 900;
+}
+
+.resultado-grave::before {
+  content: "🚨 Urgência";
+  display: inline-block;
+  background: #991b1b;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 12px;
+} 
+
+.patient-form {
+  margin-top: 32px;
+  padding: 24px;
+  border-radius: 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.patient-form h2 {
+  margin-top: 0;
+  color: #0f766e;
+  font-size: 24px;
+  border-bottom: 2px solid #ccfbf1;
+  padding-bottom: 10px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 18px;
+  margin-top: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0 12px;
+  font-size: 15px;
+  background: #ffffff;
+  color: #1f2937;
+  outline: none;
+  transition: 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
+@media (max-width: 700px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
