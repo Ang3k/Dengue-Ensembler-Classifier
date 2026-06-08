@@ -13,6 +13,10 @@ FINAL_COLUMN_ORDER = [
     "age_years",
     "sex",
     "sex_label",
+    "pregnancy_status",
+    "pregnancy_status_label",
+    "race",
+    "race_label",
     "education_level",
     "education_level_label",
     "occupation_code",
@@ -24,6 +28,7 @@ FINAL_COLUMN_ORDER = [
     "residence_health_region",
     # Notificação
     "disease_code",
+    "notification_date",
     "notification_year",
     "notification_month",
     "notification_day",
@@ -33,6 +38,7 @@ FINAL_COLUMN_ORDER = [
     "health_facility",
     # Início dos sintomas
     "symptom_onset_date",
+    "days_to_notification",
     "symptom_epi_year",
     "symptom_epi_week_number",
     # Sintomas e sinais auto-relatáveis/registrados
@@ -112,9 +118,9 @@ class DengueDataCleaner:
             "kidney_disease", "retro_orbital_pain", "chik_clinical_form",
             "duplicate_flag", "dengue_hemorrhagic_fever", "hemorrhagic_evidence",
             "joint_pain", "headache", "severe_tachycardia",
-            "alarm_hematocrit_rise", "symptom_epi_week", "severe_hematemesis",
+            "alarm_hematocrit_rise", "symptom_onset_date", "symptom_epi_week", "severe_hematemesis",
             "final_classification", "hematuria", "viral_isolation_result", "rash",
-            "vomiting", "birth_date", "severe_weak_pulse", "race",
+            "vomiting", "birth_date", "notification_date", "severe_weak_pulse", "race",
             "alarm_low_platelets", "alarm_signs_date", "severe_bleeding",
             "plasma_leakage", "petechiae", "pregnancy_status",
             "severe_ast_elevated", "severe_cap_refill", "severe_myocarditis",
@@ -142,10 +148,13 @@ class DengueDataCleaner:
         df["birth_year_derived"] = df["birth_date"].dt.year
         df["age"] = 2020 - df["birth_year_derived"]
         df = df.drop(["birth_date", "birth_year_derived"], axis=1, errors="ignore")
+        df["notification_date"] = pd.to_datetime(df["notification_date"], errors="coerce")
+        df["symptom_onset_date"] = pd.to_datetime(df["symptom_onset_date"], errors="coerce")
+        df["days_to_notification"] = (df["notification_date"] - df["symptom_onset_date"]).dt.days
 
         df = df.drop(["autoimmune_disease", "kidney_disease"], axis=1, errors="ignore")
         df = df.drop(
-            ["pregnancy_status", "race", "chik_clinical_form", "viral_isolation_result"],
+            ["chik_clinical_form", "viral_isolation_result"],
             axis=1,
             errors="ignore",
         )
