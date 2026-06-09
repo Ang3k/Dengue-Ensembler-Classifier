@@ -24,13 +24,13 @@ function Resultado({ title, message, level, models }: ResultadoProps) {
 
       <div className="avaliacoes-container">
         <div className="avaliacao-card">
-          <h3>Avaliação clínica</h3>
+          <h3>Modelo 1</h3>
           <span className="avaliacao-status">{models.clinical.result}</span>
           <p>{models.clinical.description}</p>
         </div>
 
         <div className="avaliacao-card">
-          <h3>Avaliação epidemiológica</h3>
+          <h3>Modelo 2</h3>
           <span className="avaliacao-status">
             {models.epidemiological.result}
           </span>
