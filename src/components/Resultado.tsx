@@ -22,60 +22,29 @@ function Resultado({ title, message, level, models }: ResultadoProps) {
 
       <p>{message}</p>
 
-      <div className="modelos-container">
-        <div className="modelo-card">
-          <div className="modelo-header">
-            <span className="modelo-icon">🩺</span>
-            <div>
-              <h3>{models.clinical.name}</h3>
-              <strong>{models.clinical.result}</strong>
-            </div>
-          </div>
-
-          <div className="confidence-bar">
-            <div
-              className="confidence-fill"
-              style={{ width: models.clinical.confidence }}
-            ></div>
-          </div>
-
-          <p className="confidence-text">
-            Confiança simulada: {models.clinical.confidence}
-          </p>
-
+      <div className="avaliacoes-container">
+        <div className="avaliacao-card">
+          <h3>Modelo 1</h3>
+          <span className="avaliacao-status">{models.clinical.result}</span>
           <p>{models.clinical.description}</p>
         </div>
 
-        <div className="modelo-card">
-          <div className="modelo-header">
-            <span className="modelo-icon">📊</span>
-            <div>
-              <h3>{models.epidemiological.name}</h3>
-              <strong>{models.epidemiological.result}</strong>
-            </div>
-          </div>
-
-          <div className="confidence-bar">
-            <div
-              className="confidence-fill"
-              style={{ width: models.epidemiological.confidence }}
-            ></div>
-          </div>
-
-          <p className="confidence-text">
-            Confiança simulada: {models.epidemiological.confidence}
-          </p>
-
+        <div className="avaliacao-card">
+          <h3>Modelo 2</h3>
+          <span className="avaliacao-status">
+            {models.epidemiological.result}
+          </span>
           <p>{models.epidemiological.description}</p>
         </div>
       </div>
 
-      <div className="conclusao-modelos">
-        <strong>Conclusão combinada:</strong>
+      <div className="orientacao-final">
+        <strong>Orientação:</strong>
         <p>
-          A avaliação acima é uma simulação visual de dois modelos. Ela não
-          substitui avaliação médica, exames laboratoriais ou atendimento em
-          unidade de saúde.
+          Esta triagem é apenas informativa e não substitui avaliação médica.
+          Em caso de piora, febre persistente, sangramentos, dor abdominal
+          intensa, vômitos persistentes ou sonolência, procure atendimento em
+          uma unidade de saúde.
         </p>
       </div>
     </div>

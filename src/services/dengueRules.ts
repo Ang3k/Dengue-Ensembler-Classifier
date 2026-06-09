@@ -4,573 +4,245 @@ export type TriageItem = {
   id: string;
   label: string;
   points: number;
-  group: "clinico" | "comorbidade" | "alarme" | "grave" | "hemorragico" | "laboratorial";
-  danger?: boolean;
+  group: "symptoms" | "clinical";
+};
+
+type ModelResult = {
+  name: string;
+  result: string;
+  confidence: string;
+  description: string;
+};
+
+type EvaluationResult = {
+  level: string;
+  title: string;
+  message: string;
+  models: {
+    clinical: ModelResult;
+    epidemiological: ModelResult;
+  };
 };
 
 export const triageItems: TriageItem[] = [
-  // SINAIS CLÍNICOS PRINCIPAIS - SINAN
   {
-    id: "febre",
+    id: "fever",
     label: "Febre",
     points: 3,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "mialgia",
+    id: "myalgia",
     label: "Mialgia / dor muscular",
     points: 2,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "cefaleia",
+    id: "headache",
     label: "Cefaleia / dor de cabeça",
     points: 2,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "exantema",
-    label: "Exantema / manchas vermelhas na pele",
+    id: "rash",
+    label: "Exantema / manchas na pele",
     points: 2,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "vomito",
-    label: "Vômito",
+    id: "vomiting",
+    label: "Vômitos",
     points: 2,
-    group: "clinico",
+    group: "symptoms",
   },
   {
     id: "nausea",
     label: "Náusea / enjoo",
     points: 1,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "dor_costas",
+    id: "back_pain",
     label: "Dor nas costas",
     points: 1,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "conjuntivite",
+    id: "conjunctivitis",
     label: "Conjuntivite",
     points: 1,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "artrite",
-    label: "Artrite / inflamação nas articulações",
+    id: "arthritis",
+    label: "Artrite",
     points: 1,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "artralgia",
-    label: "Artralgia intensa / dor forte nas articulações",
+    id: "joint_pain",
+    label: "Dor nas articulações",
     points: 2,
-    group: "clinico",
+    group: "symptoms",
   },
   {
-    id: "petequias",
+    id: "petechiae",
     label: "Petéquias / pequenos pontos vermelhos na pele",
-    points: 3,
-    group: "clinico",
+    points: 2,
+    group: "symptoms",
   },
   {
-    id: "leucopenia",
-    label: "Leucopenia em exame de sangue",
-    points: 3,
-    group: "laboratorial",
+    id: "retro_orbital_pain",
+    label: "Dor atrás dos olhos",
+    points: 2,
+    group: "symptoms",
   },
   {
-    id: "prova_laco",
+    id: "tourniquet_test",
     label: "Prova do laço positiva",
     points: 3,
-    group: "laboratorial",
-  },
-  {
-    id: "dor_retroorbital",
-    label: "Dor atrás dos olhos / dor retro-orbital",
-    points: 2,
-    group: "clinico",
-  },
-
-  // DOENÇAS PRÉ-EXISTENTES
-  {
-    id: "diabetes",
-    label: "Diabetes",
-    points: 1,
-    group: "comorbidade",
-  },
-  {
-    id: "hematologica",
-    label: "Doença hematológica",
-    points: 1,
-    group: "comorbidade",
-  },
-  {
-    id: "hepatopatia",
-    label: "Hepatopatia / doença no fígado",
-    points: 1,
-    group: "comorbidade",
-  },
-  {
-    id: "renal",
-    label: "Doença renal crônica",
-    points: 1,
-    group: "comorbidade",
-  },
-  {
-    id: "hipertensao",
-    label: "Hipertensão arterial",
-    points: 1,
-    group: "comorbidade",
-  },
-  {
-    id: "acido_peptica",
-    label: "Doença ácido-péptica / gastrite ou úlcera",
-    points: 1,
-    group: "comorbidade",
-  },
-  {
-    id: "autoimune",
-    label: "Doença autoimune",
-    points: 1,
-    group: "comorbidade",
-  },
-
-  // SINAIS DE ALARME
-  {
-    id: "alarme_hipotensao",
-    label: "Hipotensão / pressão baixa",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_plaquetas",
-    label: "Queda abrupta de plaquetas",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_vomitos",
-    label: "Vômitos persistentes",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_sangramento",
-    label: "Sangramento de mucosa ou outras hemorragias",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_hematocrito",
-    label: "Aumento do hematócrito",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_abdominal",
-    label: "Dor abdominal intensa",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_letargia",
-    label: "Letargia ou irritabilidade",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_hepatomegalia",
-    label: "Hepatomegalia / fígado aumentado",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-  {
-    id: "alarme_liquidos",
-    label: "Acúmulo de líquidos",
-    points: 8,
-    group: "alarme",
-    danger: true,
-  },
-
-  // SINAIS DE DENGUE GRAVE
-  {
-    id: "grave_pulso",
-    label: "Pulso débil ou indetectável",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_pa_convergente",
-    label: "Pressão arterial convergente",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_enchimento",
-    label: "Alteração no tempo de enchimento capilar",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_insuf_respiratoria",
-    label: "Acúmulo de líquidos com insuficiência respiratória",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_taquicardia",
-    label: "Taquicardia",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_extremidades",
-    label: "Extremidades frias",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_hipotensao_tardia",
-    label: "Hipotensão arterial em fase tardia",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_hematemese",
-    label: "Hematêmese / vômito com sangue",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_melena",
-    label: "Melena / fezes escuras com sangue",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_metrorragia",
-    label: "Metrorragia volumosa",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_sangramento_snc",
-    label: "Sangramento do sistema nervoso central",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_ast_alt",
-    label: "AST/ALT maior que 1000",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_miocardite",
-    label: "Miocardite",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_consciencia",
-    label: "Alteração da consciência",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-  {
-    id: "grave_outros_orgaos",
-    label: "Comprometimento de outros órgãos",
-    points: 12,
-    group: "grave",
-    danger: true,
-  },
-
-  // MANIFESTAÇÕES HEMORRÁGICAS
-  {
-    id: "mani_hemorragica",
-    label: "Manifestações hemorrágicas",
-    points: 6,
-    group: "hemorragico",
-    danger: true,
-  },
-  {
-    id: "epistaxe",
-    label: "Epistaxe / sangramento nasal",
-    points: 6,
-    group: "hemorragico",
-    danger: true,
-  },
-  {
-    id: "gengivorragia",
-    label: "Gengivorragia / sangramento na gengiva",
-    points: 6,
-    group: "hemorragico",
-    danger: true,
-  },
-  {
-    id: "metrorragia",
-    label: "Metrorragia",
-    points: 6,
-    group: "hemorragico",
-    danger: true,
-  },
-  {
-    id: "hematuria",
-    label: "Hematúria / sangue na urina",
-    points: 6,
-    group: "hemorragico",
-    danger: true,
-  },
-  {
-    id: "sangramento_gastro",
-    label: "Sangramento gastrointestinal",
-    points: 8,
-    group: "hemorragico",
-    danger: true,
-  },
-  {
-    id: "extravasamento",
-    label: "Extravasamento plasmático",
-    points: 8,
-    group: "hemorragico",
-    danger: true,
+    group: "clinical",
   },
 ];
 
-export function avaliarDengue(selectedIds: string[], patientData: PatientData) {
+export function avaliarDengue(
+  selectedIds: string[],
+  patientData: PatientData
+): EvaluationResult {
   const selectedItems = triageItems.filter((item) =>
     selectedIds.includes(item.id)
   );
 
-  const totalPoints = selectedItems.reduce((sum, item) => sum + item.points, 0);
+  const totalPoints = selectedItems.reduce((sum, item) => {
+    return sum + item.points;
+  }, 0);
 
-  const hasFever = selectedIds.includes("febre");
+  const hasFever = selectedIds.includes("fever");
 
-  const clinicalCount = selectedItems.filter(
-    (item) => item.group === "clinico"
+  const symptomsCount = selectedItems.filter(
+    (item) => item.group === "symptoms"
   ).length;
 
-  const comorbidityCount = selectedItems.filter(
-    (item) => item.group === "comorbidade"
-  ).length;
+  const hasTourniquetTest = selectedIds.includes("tourniquet_test");
 
-  const hasAlarmSign = selectedItems.some((item) => item.group === "alarme");
+  const age = Number(patientData.ageYears || patientData.age);
 
-  const hasSevereSign = selectedItems.some((item) => item.group === "grave");
+  const isChild = age > 0 && age < 12;
+  const isOlderAdult = age >= 60;
 
-  const hasBleeding = selectedItems.some(
-    (item) => item.group === "hemorragico"
-  );
-  const idade = Number(patientData.idade);
+  const isPregnant =
+    patientData.pregnancyStatus === "1" ||
+    patientData.pregnancyStatus === "2" ||
+    patientData.pregnancyStatus === "3" ||
+    patientData.pregnancyStatus === "4";
 
-const isCrianca = idade > 0 && idade < 12;
-const isIdoso = idade >= 60;
-const isGestante =
-  patientData.gestante === "1" ||
-  patientData.gestante === "2" ||
-  patientData.gestante === "3" ||
-  patientData.gestante === "4";
+  const wasHospitalized = patientData.hospitalized === "1";
 
-const hasComorbidity = selectedItems.some(
-  (item) => item.group === "comorbidade"
-);
+  const daysToNotification = Number(patientData.daysToNotification);
+  const delayedNotification = daysToNotification > 5;
 
-const grupoRisco = isCrianca || isIdoso || isGestante || hasComorbidity;
+  const hasRiskContext =
+    isChild || isOlderAdult || isPregnant || wasHospitalized || delayedNotification;
 
-  if (hasSevereSign) {
-   return {
-  level: "GRAVE",
-  title: "Possíveis sinais de dengue grave",
-  message:
-    "Você marcou sinais compatíveis com dengue grave. Procure atendimento médico imediatamente ou uma emergência.",
-  models: {
-    clinical: {
-      name: "Modelo Clínico",
-      result: "Risco muito alto",
-      confidence: "94%",
-      description:
-        "Identificou sinais compatíveis com dengue grave, como alterações circulatórias, sangramentos importantes ou comprometimento de órgãos.",
-    },
-    epidemiological: {
-      name: "Modelo Epidemiológico",
-      result: "Prioridade máxima",
-      confidence: "89%",
-      description:
-        "Considerou fatores como idade, comorbidades, gestação, município informado e necessidade de atendimento imediato.",
-    },
-  },
-};
-  }
-
-  if (hasAlarmSign || hasBleeding) {
+  if (hasFever && symptomsCount >= 4) {
     return {
-  level: "ALERTA",
-  title: "Sinais de alarme para dengue grave",
-  message:
-    "Você marcou sinais de alarme ou sangramento. Procure atendimento médico com urgência.",
-  models: {
-    clinical: {
-      name: "Modelo Clínico",
-      result: "Alerta clínico",
-      confidence: "88%",
-      description:
-        "Encontrou sinais de alarme, como dor abdominal intensa, vômitos persistentes, sangramentos ou queda de plaquetas.",
-    },
-    epidemiological: {
-      name: "Modelo Epidemiológico",
-      result: "Risco aumentado",
-      confidence: "81%",
-      description:
-        "Avaliou os dados do paciente e indicou maior necessidade de acompanhamento pela unidade de saúde.",
-    },
-  },
-};
+      level: "ALTA",
+      title: "Alta suspeita de dengue",
+      message:
+        "Os dados informados indicam febre associada a múltiplos sintomas compatíveis com dengue. Recomenda-se procurar uma unidade de saúde para avaliação.",
+      models: {
+        clinical: {
+          name: "Avaliação clínica",
+          result: "Compatibilidade alta",
+          confidence: "83%",
+          description:
+            "A avaliação clínica considerou a presença de febre associada a sintomas como dor muscular, cefaleia, dor atrás dos olhos, náuseas, vômitos, exantema ou dor articular.",
+        },
+        epidemiological: {
+          name: "Avaliação epidemiológica",
+          result: hasRiskContext
+            ? "Risco contextual aumentado"
+            : "Risco contextual moderado",
+          confidence: hasRiskContext ? "78%" : "68%",
+          description:
+            "A avaliação contextual considerou idade, sexo, gestação, município de residência, município de notificação, data dos sintomas, hospitalização e tempo até a notificação.",
+        },
+      },
+    };
   }
 
-if (hasFever && clinicalCount >= 3) {
-  return {
-    level: "ALTA",
-    title: "Alta suspeita de dengue",
-    message:
-      "Você marcou febre e vários sinais clínicos compatíveis com dengue. Procure uma unidade de saúde para avaliação.",
-    models: {
-      clinical: {
-        name: "Modelo Clínico",
-        result: "Alta compatibilidade",
-        confidence: "83%",
-        description:
-          "O modelo clínico identificou febre associada a vários sinais compatíveis com dengue, como dor no corpo, cefaleia, dor atrás dos olhos, náusea, manchas na pele ou dores articulares.",
+  if (hasFever && symptomsCount >= 2) {
+    return {
+      level: "MODERADA",
+      title: "Suspeita moderada de dengue",
+      message:
+        "Há febre associada a alguns sintomas compatíveis com dengue. O resultado não confirma a doença, mas recomenda atenção à evolução do quadro.",
+      models: {
+        clinical: {
+          name: "Avaliação clínica",
+          result: "Compatibilidade parcial",
+          confidence: "69%",
+          description:
+            "A combinação de sintomas é compatível com suspeita clínica, mas ainda não representa um conjunto amplo de manifestações.",
+        },
+        epidemiological: {
+          name: "Avaliação epidemiológica",
+          result: hasRiskContext
+            ? "Atenção ao perfil informado"
+            : "Risco contextual intermediário",
+          confidence: hasRiskContext ? "72%" : "61%",
+          description:
+            "Foram considerados dados como idade, gestação, município, unidade notificadora, início dos sintomas e hospitalização.",
+        },
       },
-      epidemiological: {
-        name: "Modelo Epidemiológico",
-        result: "Risco moderado a alto",
-        confidence: "72%",
-        description:
-          "O modelo epidemiológico simulou a análise de idade, município, data dos primeiros sintomas, comorbidades e demais dados do paciente para complementar a triagem.",
-      },
-    },
-  };
-}
-
-  if (hasFever && clinicalCount >= 2) {
-   return {
-  level: "MODERADA",
-  title: "Suspeita moderada de dengue",
-  message:
-    "Você marcou febre e alguns sintomas compatíveis com dengue. Observe a evolução e procure atendimento, principalmente se houver piora.",
-  models: {
-    clinical: {
-      name: "Modelo Clínico",
-      result: "Compatibilidade parcial",
-      confidence: "68%",
-      description:
-        "Há sintomas compatíveis com dengue, mas a combinação marcada ainda não é suficiente para indicar alta suspeita.",
-    },
-    epidemiological: {
-      name: "Modelo Epidemiológico",
-      result: "Risco variável",
-      confidence: "64%",
-      description:
-        "Os dados pessoais e territoriais sugerem acompanhamento, principalmente se houver casos recentes no município.",
-    },
-  },
-};
+    };
   }
 
-  if (totalPoints >= 7 || comorbidityCount >= 2) {
+  if (hasTourniquetTest || totalPoints >= 7 || hasRiskContext) {
+    return {
+      level: "MODERADA",
+      title: "Atenção aos dados informados",
+      message:
+        "Alguns sintomas ou dados contextuais merecem atenção. A triagem sugere acompanhamento, principalmente se houver piora ou persistência dos sintomas.",
+      models: {
+        clinical: {
+          name: "Avaliação clínica",
+          result: "Achados relevantes",
+          confidence: "64%",
+          description:
+            "A avaliação identificou sinais ou sintomas que podem aparecer em quadros suspeitos de dengue, como prova do laço positiva, petéquias, febre ou dores no corpo.",
+        },
+        epidemiological: {
+          name: "Avaliação epidemiológica",
+          result: "Acompanhamento recomendado",
+          confidence: "67%",
+          description:
+            "A análise considerou fatores como idade, gestação, residência, município de notificação, hospitalização e intervalo entre início dos sintomas e notificação.",
+        },
+      },
+    };
+  }
+
   return {
-    level: "MODERADA",
-    title: "Atenção aos sintomas",
+    level: "BAIXA",
+    title: "Baixa suspeita de dengue",
     message:
-      "Há sintomas ou condições pré-existentes que merecem atenção. O resultado não confirma dengue, mas recomenda acompanhamento.",
+      "Com base nos dados selecionados, a suspeita de dengue parece baixa. Mesmo assim, procure atendimento se houver febre persistente, piora dos sintomas ou surgimento de novos sinais.",
     models: {
       clinical: {
-        name: "Modelo Clínico",
-        result: "Compatibilidade parcial",
-        confidence: "67%",
+        name: "Avaliação clínica",
+        result: "Baixa compatibilidade",
+        confidence: "58%",
         description:
-          "O modelo clínico identificou sintomas compatíveis com dengue, mas sem sinais suficientes para classificar como alta suspeita ou dengue grave.",
+          "Poucos sintomas típicos foram informados, reduzindo a compatibilidade clínica com um quadro suspeito de dengue.",
       },
       epidemiological: {
-        name: "Modelo Epidemiológico",
-        result: "Atenção ao perfil do paciente",
-        confidence: "74%",
+        name: "Avaliação epidemiológica",
+        result: "Baixo risco contextual",
+        confidence: "55%",
         description:
-          "O modelo epidemiológico considerou condições pré-existentes, idade, município informado e dados gerais do paciente como fatores que podem exigir acompanhamento.",
+          "Os dados informados não indicaram, nesta simulação, fatores contextuais suficientes para elevar o nível de atenção.",
       },
     },
   };
-}
- if (grupoRisco && totalPoints >= 5) {
-  return {
-    level: "MODERADA",
-    title: "Atenção: paciente com fator de risco",
-    message:
-      "Além dos sintomas marcados, há fator de risco como idade, gestação ou doença pré-existente. Recomenda-se procurar uma unidade de saúde para avaliação.",
-    models: {
-      clinical: {
-        name: "Modelo Clínico",
-        result: "Compatibilidade parcial",
-        confidence: "70%",
-        description:
-          "O modelo clínico identificou sintomas compatíveis com dengue, mas sem sinais suficientes para classificar como dengue grave.",
-      },
-      epidemiological: {
-        name: "Modelo Epidemiológico",
-        result: "Risco aumentado",
-        confidence: "76%",
-        description:
-          "O modelo epidemiológico considerou fatores como idade, gestação, doenças pré-existentes, município informado e data dos primeiros sintomas.",
-      },
-    },
-  };
-}
-  return {
-  level: "BAIXA",
-  title: "Baixa suspeita de dengue",
-  message:
-    "Pelos itens marcados, a suspeita parece baixa. Mesmo assim, se houver febre persistente, piora ou novos sintomas, procure atendimento.",
-  models: {
-    clinical: {
-      name: "Modelo Clínico",
-      result: "Baixa compatibilidade",
-      confidence: "61%",
-      description:
-        "Poucos sintomas típicos foram marcados, então a compatibilidade clínica com dengue ficou baixa.",
-    },
-    epidemiological: {
-      name: "Modelo Epidemiológico",
-      result: "Baixo risco informado",
-      confidence: "58%",
-      description:
-        "Com os dados preenchidos, não foram simulados fatores suficientes para elevar o risco epidemiológico.",
-    },
-  },
-};
 }
