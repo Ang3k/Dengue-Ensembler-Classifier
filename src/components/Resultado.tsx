@@ -1,41 +1,36 @@
-type ModelResult = {
-  name: string;
-  result: string;
-  confidence: string;
-  description: string;
-};
+import { DENGUE_THRESHOLD } from "../services/dengueRules";
+import type { EvaluationResult } from "../services/dengueRules";
 
-type ResultadoProps = {
-  title: string;
-  message: string;
-  level: string;
-  models: {
-    clinical: ModelResult;
-    epidemiological: ModelResult;
-  };
-};
-
-function Resultado({ title, message, level, models }: ResultadoProps) {
+function Resultado({ models, average, isDengue }: EvaluationResult) {
   return (
-    <div className={`resultado resultado-${level.toLowerCase()}`}>
-      <h2>{title}</h2>
+    <div className="resultado-triagem">
+      <h2>Resultado da triagem</h2>
 
-      <p>{message}</p>
+      <span className="sim-label">Resultado dos modelos</span>
+      <div className="modelo-quadrados">
+        {models.map((modelo) => (
+          <div className="modelo-quadrado" key={modelo.name}>
+            <span className="modelo-quadrado-nome">{modelo.name}</span>
+            <span className="modelo-quadrado-prob">{modelo.probability}%</span>
+            <span className="modelo-quadrado-legenda">prob. de dengue</span>
+          </div>
+        ))}
+      </div>
 
-      <div className="avaliacoes-container">
-        <div className="avaliacao-card">
-          <h3>Modelo 1</h3>
-          <span className="avaliacao-status">{models.clinical.result}</span>
-          <p>{models.clinical.description}</p>
-        </div>
+      <div className="predicao-media">
+        <span className="sim-label">Probabilidade média</span>
+        <span className="sim-valor-destaque">{average}%</span>
+      </div>
 
-        <div className="avaliacao-card">
-          <h3>Modelo 2</h3>
-          <span className="avaliacao-status">
-            {models.epidemiological.result}
-          </span>
-          <p>{models.epidemiological.description}</p>
-        </div>
+      <div
+        className={`sim-veredito ${
+          isDengue ? "sim-veredito-dengue" : "sim-veredito-nao"
+        }`}
+      >
+        {isDengue ? "É dengue" : "Não é dengue"}
+        <small>
+          Média {isDengue ? "acima" : "abaixo"} do limiar de {DENGUE_THRESHOLD}%
+        </small>
       </div>
 
       <div className="orientacao-final">

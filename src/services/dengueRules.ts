@@ -7,22 +7,21 @@ export type TriageItem = {
   group: "symptoms" | "clinical";
 };
 
-type ModelResult = {
+export type ModelPrediction = {
   name: string;
-  result: string;
-  confidence: string;
-  description: string;
+  probability: number;
 };
 
-type EvaluationResult = {
-  level: string;
-  title: string;
-  message: string;
-  models: {
-    clinical: ModelResult;
-    epidemiological: ModelResult;
-  };
+export type EvaluationResult = {
+  models: ModelPrediction[];
+  average: number;
+  isDengue: boolean;
 };
+
+// Acima deste valor (em %), o resultado final é considerado dengue
+export const DENGUE_THRESHOLD = 40;
+
+const MODEL_NAMES = ["Random Forest", "LightGBM", "XGBoost"];
 
 export const triageItems: TriageItem[] = [
   {
@@ -119,12 +118,6 @@ export function avaliarDengue(
 
   const hasFever = selectedIds.includes("fever");
 
-  const symptomsCount = selectedItems.filter(
-    (item) => item.group === "symptoms"
-  ).length;
-
-  const hasTourniquetTest = selectedIds.includes("tourniquet_test");
-
   const age = Number(patientData.ageYears || patientData.age);
 
   const isChild = age > 0 && age < 12;
@@ -144,105 +137,25 @@ export function avaliarDengue(
   const hasRiskContext =
     isChild || isOlderAdult || isPregnant || wasHospitalized || delayedNotification;
 
-  if (hasFever && symptomsCount >= 4) {
-    return {
-      level: "ALTA",
-      title: "Alta suspeita de dengue",
-      message:
-        "Os dados informados indicam febre associada a múltiplos sintomas compatíveis com dengue. Recomenda-se procurar uma unidade de saúde para avaliação.",
-      models: {
-        clinical: {
-          name: "Avaliação clínica",
-          result: "Compatibilidade alta",
-          confidence: "83%",
-          description:
-            "A avaliação clínica considerou a presença de febre associada a sintomas como dor muscular, cefaleia, dor atrás dos olhos, náuseas, vômitos, exantema ou dor articular.",
-        },
-        epidemiological: {
-          name: "Avaliação epidemiológica",
-          result: hasRiskContext
-            ? "Risco contextual aumentado"
-            : "Risco contextual moderado",
-          confidence: hasRiskContext ? "78%" : "68%",
-          description:
-            "A avaliação contextual considerou idade, sexo, gestação, município de residência, município de notificação, data dos sintomas, hospitalização e tempo até a notificação.",
-        },
-      },
-    };
-  }
+  // Probabilidade base a partir dos sintomas e do contexto informado.
+  // Ainda é uma simulação — não vem de um modelo treinado de verdade.
+  const base = Math.max(
+    5,
+    Math.min(
+      95,
+      10 + totalPoints * 4 + (hasFever ? 12 : 0) + (hasRiskContext ? 8 : 0)
+    )
+  );
 
-  if (hasFever && symptomsCount >= 2) {
-    return {
-      level: "MODERADA",
-      title: "Suspeita moderada de dengue",
-      message:
-        "Há febre associada a alguns sintomas compatíveis com dengue. O resultado não confirma a doença, mas recomenda atenção à evolução do quadro.",
-      models: {
-        clinical: {
-          name: "Avaliação clínica",
-          result: "Compatibilidade parcial",
-          confidence: "69%",
-          description:
-            "A combinação de sintomas é compatível com suspeita clínica, mas ainda não representa um conjunto amplo de manifestações.",
-        },
-        epidemiological: {
-          name: "Avaliação epidemiológica",
-          result: hasRiskContext
-            ? "Atenção ao perfil informado"
-            : "Risco contextual intermediário",
-          confidence: hasRiskContext ? "72%" : "61%",
-          description:
-            "Foram considerados dados como idade, gestação, município, unidade notificadora, início dos sintomas e hospitalização.",
-        },
-      },
-    };
-  }
+  const models: ModelPrediction[] = MODEL_NAMES.map((name) => {
+    const variation = Math.random() * 16 - 8; // entre -8 e +8
+    const probability = Math.max(1, Math.min(99, Math.round(base + variation)));
+    return { name, probability };
+  });
 
-  if (hasTourniquetTest || totalPoints >= 7 || hasRiskContext) {
-    return {
-      level: "MODERADA",
-      title: "Atenção aos dados informados",
-      message:
-        "Alguns sintomas ou dados contextuais merecem atenção. A triagem sugere acompanhamento, principalmente se houver piora ou persistência dos sintomas.",
-      models: {
-        clinical: {
-          name: "Avaliação clínica",
-          result: "Achados relevantes",
-          confidence: "64%",
-          description:
-            "A avaliação identificou sinais ou sintomas que podem aparecer em quadros suspeitos de dengue, como prova do laço positiva, petéquias, febre ou dores no corpo.",
-        },
-        epidemiological: {
-          name: "Avaliação epidemiológica",
-          result: "Acompanhamento recomendado",
-          confidence: "67%",
-          description:
-            "A análise considerou fatores como idade, gestação, residência, município de notificação, hospitalização e intervalo entre início dos sintomas e notificação.",
-        },
-      },
-    };
-  }
+  const average = Math.round(
+    models.reduce((sum, model) => sum + model.probability, 0) / models.length
+  );
 
-  return {
-    level: "BAIXA",
-    title: "Baixa suspeita de dengue",
-    message:
-      "Com base nos dados selecionados, a suspeita de dengue parece baixa. Mesmo assim, procure atendimento se houver febre persistente, piora dos sintomas ou surgimento de novos sinais.",
-    models: {
-      clinical: {
-        name: "Avaliação clínica",
-        result: "Baixa compatibilidade",
-        confidence: "58%",
-        description:
-          "Poucos sintomas típicos foram informados, reduzindo a compatibilidade clínica com um quadro suspeito de dengue.",
-      },
-      epidemiological: {
-        name: "Avaliação epidemiológica",
-        result: "Baixo risco contextual",
-        confidence: "55%",
-        description:
-          "Os dados informados não indicaram, nesta simulação, fatores contextuais suficientes para elevar o nível de atenção.",
-      },
-    },
-  };
+  return { models, average, isDengue: average >= DENGUE_THRESHOLD };
 }
