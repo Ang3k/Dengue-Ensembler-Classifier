@@ -1,12 +1,6 @@
 import pandas as pd
 
-try:
-    from .cbo_map import CBO_MAP
-except ImportError:
-    try:
-        from cbo_map import CBO_MAP
-    except ImportError:
-        CBO_MAP = {}
+from .cbo_map import CBO_MAP
 
 
 COLUMN_RENAME_MAP = {

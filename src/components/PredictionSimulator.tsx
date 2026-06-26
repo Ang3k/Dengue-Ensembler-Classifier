@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-// Valores realistas baseados nos mapeamentos do projeto (sinan_mappings.py / cbo_map.py)
+// Valores realistas baseados nos mapeamentos em dengue_pipeline.
 const SEXOS = ["Masculino", "Feminino"];
 
 const RACAS = ["Branca", "Preta", "Amarela", "Parda", "Indígena"];

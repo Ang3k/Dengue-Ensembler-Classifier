@@ -1,8 +1,8 @@
-import casosPorMes from "../../analise_dados/imagens/casos_por_mes.png";
-import sintomas from "../../analise_dados/imagens/sintomas_confirmados_vs_descartados.png";
-import casosPorSexo from "../../analise_dados/imagens/casos_confirmados_por_sexo.png";
-import ocupacoesFeminino from "../../analise_dados/imagens/ocupacoes_confirmadas_feminino.png";
-import ocupacoesMasculino from "../../analise_dados/imagens/ocupacoes_confirmadas_masculino.png";
+import casosPorMes from "../../reports/figures/casos_por_mes.png";
+import sintomas from "../../reports/figures/sintomas_confirmados_vs_descartados.png";
+import casosPorSexo from "../../reports/figures/casos_confirmados_por_sexo.png";
+import ocupacoesFeminino from "../../reports/figures/ocupacoes_confirmadas_feminino.png";
+import ocupacoesMasculino from "../../reports/figures/ocupacoes_confirmadas_masculino.png";
 
 type Insight = { titulo: string; texto: string };
 type Imagem = { src: string; alt: string; legenda?: string };

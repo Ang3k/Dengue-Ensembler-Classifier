@@ -1,10 +1,14 @@
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
-try:
-    from .sinan_mappings import add_sinan_cbo_labels, standardize_columns
-except ImportError:
-    from sinan_mappings import add_sinan_cbo_labels, standardize_columns
+from .paths import (
+    PROJECT_ROOT,
+    RAW_CSV_DIR,
+    RAW_DENGUE_PARQUETS,
+    RAW_PARQUET_DIR,
+)
+from .sinan_mappings import add_sinan_cbo_labels, standardize_columns
 
 
 FINAL_COLUMN_ORDER = [
@@ -71,14 +75,8 @@ def ordenar_colunas_finais(df):
 
 class DengueDataCleaner:
     def __init__(self, arquivos=None):
-        base = Path(__file__).resolve().parents[1]
-
         if arquivos is None:
-            arquivos = [
-                base / "data" / "DENGBR17.parquet",
-                base / "data" / "DENGBR18.parquet",
-                base / "data" / "DENGBR19.parquet",
-            ]
+            arquivos = RAW_DENGUE_PARQUETS
         elif isinstance(arquivos, (str, Path)):
             arquivos = [arquivos]
 
@@ -86,12 +84,12 @@ class DengueDataCleaner:
         self.df = self.carregar()
 
     def carregar(self):
-        data_dir = Path(__file__).resolve().parents[1] / "data"
         dfs = []
 
         for arquivo in self.arquivos:
-            if not arquivo.exists() and (data_dir / arquivo.name).exists():
-                arquivo = data_dir / arquivo.name
+            fallback_dir = RAW_CSV_DIR if arquivo.suffix.lower() == ".csv" else RAW_PARQUET_DIR
+            if not arquivo.exists() and (fallback_dir / arquivo.name).exists():
+                arquivo = fallback_dir / arquivo.name
 
             if arquivo.suffix.lower() == ".csv":
                 dfs.append(pd.read_csv(arquivo))
@@ -253,13 +251,98 @@ class DengueDataCleaner:
         df = add_sinan_cbo_labels(df.reset_index(drop=True))
         return ordenar_colunas_finais(df)
 
-    def transformar(self):
+    def transformar_analise(self):
         df_angel = self.limpar_angel()
         df_pedro = self.limpar_pedro()
         df_ruan = self.limpar_ruan()
         return self.juntar(df_angel, df_pedro, df_ruan)
-    
+
+    def transformar_ml(self, df_tratado=None):
+        if df_tratado is None:
+            df_tratado = self.transformar_analise()
+
+        # One Hot Encoding para sexo
+        df_tratado = pd.get_dummies(df_tratado, columns=["sex_label"], dtype=int)
+        df_tratado = df_tratado.drop(columns=["sex"], errors="ignore")
+        df_tratado = df_tratado.rename(columns={
+            "sex_label_Feminino": "sex_Female",
+            "sex_label_Ignorado": "sex_Ignored",
+            "sex_label_Masculino": "sex_Male",
+        }).copy()
+
+        # Analise ciclica de meses do ano e semanas epidemiológicas
+        # Aqui, temos os meses representados num circulo --> (cos, sen)
+        df_tratado["notification_month_sin"] = np.sin(2 * np.pi * df_tratado["notification_month"] / 12)
+        df_tratado["notification_month_cos"] = np.cos(2 * np.pi * df_tratado["notification_month"] / 12)
+
+        # Max da semana epidemiológica é 53
+        df_tratado["symptom_epi_week_number_sin"] = np.sin(2 * np.pi * df_tratado["symptom_epi_week_number"] / 53)
+        df_tratado["symptom_epi_week_number_cos"] = np.cos(2 * np.pi * df_tratado["symptom_epi_week_number"] / 53)
+
+        # Criar uma coluna para quantidade total de sintomas.
+        sintomas = [
+            "fever", "myalgia", "headache", "rash", "vomiting", "nausea",
+            "back_pain", "conjunctivitis", "arthritis", "joint_pain",
+            "petechiae", "retro_orbital_pain",
+        ]
+
+        # Ja verifiquei: 1 para positivo e 2 para falso. Cada um tem 58 NaN
+        df_tratado[sintomas] = df_tratado[sintomas].replace(2, 0)
+
+        # Agora 1 = Tem ; 0 = Não tem
+        df_tratado["number_of_symptoms"] = df_tratado[sintomas].sum(axis=1)
+
+        # Rash e Retro Orbital Pain são os sintomas que apresentam maior gap relativo entre descartados x confirmados
+        sintomas_importantes = ["rash", "retro_orbital_pain"]
+
+        df_tratado["number_of_important_symptoms"] = df_tratado[sintomas_importantes].sum(axis=1)
+        df_tratado["important_symptoms"] = (df_tratado["number_of_important_symptoms"] > 0).astype(int)
+        df_tratado["both_important_symptoms"] = (
+            (df_tratado["rash"] == 1) & (df_tratado["retro_orbital_pain"] == 1)
+        ).astype(int)
+
+        # Ordinal Encoding na escolaridade
+        map_escolaridade = {
+            "Ignorado": 0,
+            None: 0,
+            "Não se aplica": 0,
+
+            "Analfabeto": 1,
+
+            "1ª a 4ª série incompleta": 2,
+            "4ª série completa": 2,
+            "5ª à 8ª série incompleta": 2,
+
+            "Ensino fundamental completo": 3,
+
+            "Ensino médio incompleto": 4,
+            "Ensino médio completo": 4,
+
+            "Educação superior incompleta": 5,
+            "Educação superior completa": 5,
+        }
+
+        df_tratado["education_level"] = df_tratado["education_level_label"].map(map_escolaridade)
+
+        df_tratado = df_tratado.drop(columns=["disease_code"])  # Disease_code todos são A90.
+
+        # Valores acima de 60 dias fazem parte de 1% dos dados; mantemos os 99% coerentes
+        df_tratado = df_tratado[(df_tratado["days_to_notification"] <= 60) | (df_tratado["days_to_notification"].isna())].copy()
+
+        # Gravidez agora é binario, 1 para sim e 0 para não. Alem disso, temos agora uma coluna
+        # binaria para dizer se a gravidez foi informada (exclui o caso dos homens e ignorado)
+        
+        df_tratado["pregnancy"] = df_tratado["pregnancy_status"].isin([1, 2, 3, 4]).astype(int)
+        df_tratado["pregnancy_informed"] = df_tratado["pregnancy_status"].isin([1, 2, 3, 4, 5]).astype(int)
+        df_tratado = df_tratado.drop(columns=["pregnancy_status_label", "pregnancy_status"], errors="ignore").copy()
+
+        df_tratado["occupation_code"] = df_tratado["occupation_code"].astype("string")  # parquet reclamava do tipo
+
+        return df_tratado
+
     def salvar_df(self, df, caminho_saida):
         caminho_saida = Path(caminho_saida)
+        if not caminho_saida.is_absolute():
+            caminho_saida = PROJECT_ROOT / caminho_saida
         caminho_saida.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(caminho_saida, index=False)
