@@ -258,3 +258,8 @@ class DengueDataCleaner:
         df_pedro = self.limpar_pedro()
         df_ruan = self.limpar_ruan()
         return self.juntar(df_angel, df_pedro, df_ruan)
+    
+    def salvar_df(self, df, caminho_saida):
+        caminho_saida = Path(caminho_saida)
+        caminho_saida.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(caminho_saida, index=False)
