@@ -66,6 +66,16 @@ FINAL_COLUMN_ORDER = [
     "final_classification_label",
 ]
 
+ML_COLUMNS_TO_DROP = [
+    "race_label",
+    "education_level_label",
+    "occupation_name",
+    "residence_state_label",
+    "hospital_state_label",
+    "notification_date",
+    "symptom_onset_date",
+]
+
 
 def ordenar_colunas_finais(df):
     colunas_ordenadas = [coluna for coluna in FINAL_COLUMN_ORDER if coluna in df.columns]
@@ -337,6 +347,13 @@ class DengueDataCleaner:
         df_tratado = df_tratado.drop(columns=["pregnancy_status_label", "pregnancy_status"], errors="ignore").copy()
 
         df_tratado["occupation_code"] = df_tratado["occupation_code"].astype("string")  # parquet reclamava do tipo
+
+        # A data de início já está representada pelo ano, semana epidemiológica
+        # e pelas versões cíclicas da semana.
+        df_tratado = df_tratado.drop(
+            columns=ML_COLUMNS_TO_DROP,
+            errors="ignore",
+        )
 
         return df_tratado
 
