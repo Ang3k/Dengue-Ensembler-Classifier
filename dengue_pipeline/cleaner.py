@@ -94,6 +94,7 @@ def ordenar_colunas_finais(df):
 class DengueDataCleaner:
     def __init__(self, arquivos=None):
         self.occupation_encoder = None
+        self.residence_state_encoder = None
         self.days_to_notification_median = None
 
         if arquivos is None:
@@ -291,16 +292,36 @@ class DengueDataCleaner:
             "sex_label_Masculino": "sex_Male",
         }).copy()
 
-        # One Hot Encoding para race e residence_state: são códigos categóricos,
-        # não ordinais (UF 35 não é "maior" que UF 11, nem raça 4 > raça 1).
-        # Usamos o código numérico como nome da coluna (race_4, residence_state_35)
-        # para ter nomes estáveis/ASCII; NaN vira linha toda zero. Stateless = sem leakage.
-        for coluna_categorica in ["race", "residence_state"]:
-            df_tratado[coluna_categorica] = (
-                df_tratado[coluna_categorica].astype("Int64").astype("string")
-            )
+        # Raça permanece em one-hot.
+        df_tratado["race"] = (
+            df_tratado["race"].astype("Int64").astype("string")
+        )
         df_tratado = pd.get_dummies(
-            df_tratado, columns=["race", "residence_state"], dtype=int
+            df_tratado,
+            columns=["race"],
+            dtype=int,
+        )
+
+        # Estado fica em uma única coluna ordinal para comparação com one-hot.
+        # O valor 0 é reservado para ausente ou desconhecido.
+        self.residence_state_encoder = OrdinalEncoder(
+            handle_unknown="use_encoded_value",
+            unknown_value=-1,
+        )
+        residence_state = (
+            df_tratado[["residence_state"]]
+            .astype("Int64")
+            .astype("string")
+        )
+        residence_state = residence_state.astype(object).where(
+            residence_state.notna(),
+            np.nan,
+        )
+        df_tratado[["residence_state"]] = (
+            self.residence_state_encoder.fit_transform(residence_state) + 1
+        )
+        df_tratado["residence_state"] = (
+            df_tratado["residence_state"].fillna(0).astype(int)
         )
 
         # Analise ciclica de meses do ano e semanas epidemiológicas

@@ -15,6 +15,7 @@ data/
     parquet/           dados originais em Parquet
     csv/               dados originais em CSV
   processed/           bases geradas pelo tratamento
+artifacts/models/      modelos treinados em Joblib
 docs/
   references/          documentos do SINAN
   plans/               planos de alterações
@@ -46,7 +47,9 @@ dengue_pipeline/cleaner.py
 dengue_pipeline/sinan_mappings.py
 dengue_pipeline/cbo_map.py
 dengue_pipeline/paths.py
+dengue_pipeline/models/gradient_boosting.py
 notebooks/cleaning/tratamento_dados_dengue.ipynb
+notebooks/modeling/models.ipynb
 ```
 
 A classe principal é `DengueDataCleaner`. Ela junta as limpezas feitas pelos membros e gera o dataframe final.
@@ -73,7 +76,7 @@ data/processed/dengue_tratado_ml.parquet
 Instalar as dependências:
 
 ```powershell
-py -3.11 -m pip install pandas numpy pyarrow
+py -3.11 -m pip install -r requirements.txt
 ```
 
 Testar a classe:
