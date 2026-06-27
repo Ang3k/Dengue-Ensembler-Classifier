@@ -80,6 +80,8 @@ ML_COLUMNS_TO_DROP = [
     "notification_day",
     "notification_epi_week",
     "symptom_onset_date",
+    "symptom_epi_year",         # ano absoluto: não generaliza, fora das features
+    "symptom_epi_week_number",  # crua: mantemos só a versão cíclica (sin/cos)
     "hospitalized",
     "hospital_state",
 ]
@@ -333,15 +335,15 @@ class DengueDataCleaner:
         df_tratado["symptom_epi_week_number_sin"] = np.sin(2 * np.pi * df_tratado["symptom_epi_week_number"] / 53)
         df_tratado["symptom_epi_week_number_cos"] = np.cos(2 * np.pi * df_tratado["symptom_epi_week_number"] / 53)
 
+        # Mês do início dos sintomas em forma cíclica (sin/cos), igual aos demais
+        # sinais de sazonalidade. Não guardamos a versão crua/linear nem o dia.
         symptom_onset = pd.to_datetime(
             df_tratado["symptom_onset_date"],
             errors="coerce",
         )
-        df_tratado["symptom_month"] = symptom_onset.dt.month
-        df_tratado["symptom_day"] = symptom_onset.dt.day
-        df_tratado["symptom_month_end"] = (
-            symptom_onset.dt.is_month_end.astype("int8")
-        )
+        symptom_month = symptom_onset.dt.month
+        df_tratado["symptom_month_sin"] = np.sin(2 * np.pi * symptom_month / 12)
+        df_tratado["symptom_month_cos"] = np.cos(2 * np.pi * symptom_month / 12)
 
         # Criar uma coluna para quantidade total de sintomas.
         sintomas = [
@@ -378,10 +380,6 @@ class DengueDataCleaner:
         sintomas_importantes = ["rash", "retro_orbital_pain"]
 
         df_tratado["number_of_important_symptoms"] = df_tratado[sintomas_importantes].sum(axis=1)
-        df_tratado["important_symptoms"] = (df_tratado["number_of_important_symptoms"] > 0).astype(int)
-        df_tratado["both_important_symptoms"] = (
-            (df_tratado["rash"] == 1) & (df_tratado["retro_orbital_pain"] == 1)
-        ).astype(int)
 
         # Ordinal Encoding na escolaridade
         map_escolaridade = {

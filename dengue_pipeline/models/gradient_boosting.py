@@ -34,6 +34,7 @@ class GradientBoostingDiseaseClassifier:
         colsample_bytree: float = 0.8,
         device: str = "cpu",
         random_state: int = 42,
+        tuning_metric: str = "average_precision",
         model_params: dict | None = None,
     ):
         if model not in {"lgbm", "xgb"}:
@@ -43,9 +44,10 @@ class GradientBoostingDiseaseClassifier:
         self.fast_train = fast_train
         self.device = device
         self.random_state = random_state
+        self.tuning_metric = tuning_metric
         self.feature_names: list[str] | None = None
         self.best_params_: dict | None = None
-        self.best_recall_: float | None = None
+        self.best_score_: float | None = None
 
         self.base_params = {
             "n_estimators": n_estimators,
@@ -157,7 +159,7 @@ class GradientBoostingDiseaseClassifier:
                 X,
                 y,
                 cv=cross_validation,
-                scoring="recall",
+                scoring=self.tuning_metric,
                 n_jobs=1,
             ).mean()
 
@@ -169,8 +171,8 @@ class GradientBoostingDiseaseClassifier:
         )
 
         self.best_params_ = study.best_params
-        self.best_recall_ = study.best_value
-        print(f"Melhor recall: {study.best_value:.4f}")
+        self.best_score_ = study.best_value
+        print(f"Melhor {self.tuning_metric}: {study.best_value:.4f}")
         print(f"Melhores parâmetros: {study.best_params}")
 
         return self._build_model(study.best_params)
