@@ -7,38 +7,71 @@ function Home() {
         <h1>Dengue Sense Classifier</h1>
 
         <p>
-          O Dengue Sense Classifier é uma ferramenta de apoio à triagem de
-          suspeita de dengue. A partir dos sintomas e dos dados informados sobre
-          o paciente, o sistema indica um nível de suspeita — de baixa a alta,
-          podendo sinalizar alerta ou sinais de gravidade — para ajudar a
-          orientar os próximos passos do atendimento.
+          O Dengue Sense Classifier é a interface de um projeto de aprendizado de
+          máquina aplicado à epidemiologia da dengue. A partir de registros
+          oficiais do SINAN, treinamos um modelo que aprende a distinguir casos{" "}
+          <strong>confirmados</strong> de <strong>descartados</strong>. Com isso,
+          ele ajuda na triagem de suspeitas, estimando a partir dos sintomas e dos
+          dados do paciente o quão provável é que se trate de um caso real de
+          dengue.
         </p>
 
         <div className="home-section">
           <h2>Como funciona</h2>
           <p>
             Na página de <strong>Triagem</strong>, você preenche os dados
-            principais do paciente (como idade, sexo e outras informações) e
-            marca os sintomas e achados clínicos observados. Com base nessas
-            informações, o sistema analisa o conjunto e apresenta um resultado
-            com o nível de suspeita e uma orientação correspondente.
+            principais do paciente (idade, sexo, gestação, entre outros) e marca
+            os sintomas e achados clínicos observados. O sistema combina essas
+            informações e devolve uma probabilidade de o caso ser dengue, junto
+            com uma orientação.
           </p>
           <p>
-            Já a página de <strong>Panorama Epidemiológico</strong> reúne
-            gráficos e observações sobre os casos de dengue, ajudando a
-            visualizar padrões, tendências e características da população
-            analisada.
+            Já a página de <strong>Panorama Epidemiológico</strong> reúne os
+            gráficos e as descobertas da nossa análise dos casos de 2017 a 2019,
+            como a sazonalidade, os sintomas mais discriminantes e os perfis por
+            sexo e ocupação.
+          </p>
+          <p>
+            <em>
+              Vale avisar: a triagem e a simulação abaixo mostram como o sistema
+              vai funcionar, mas ainda usam valores de exemplo. Elas ainda não
+              estão ligadas ao modelo que já foi treinado.
+            </em>
           </p>
         </div>
 
         <div className="home-section">
           <h2>Sobre os dados</h2>
           <p>
-            As análises são construídas a partir de registros oficiais de casos
-            de dengue notificados no Brasil, abrangendo um grande volume de
-            atendimentos ao longo dos anos. Esses dados permitem entender melhor
-            como a doença se manifesta e se distribui entre diferentes perfis de
-            pacientes.
+            As análises e o modelo usam registros oficiais de dengue notificados
+            no Brasil pelo SINAN em <strong>2017, 2018 e 2019</strong>, mais ou
+            menos 2,8 milhões de notificações. Cada registro traz sintomas, dados
+            demográficos (idade, sexo, raça/cor, escolaridade, ocupação), a
+            localização de residência e as datas de notificação e de início dos
+            sintomas. O que o modelo aprende a prever é a classificação final de
+            cada caso: confirmado ou descartado.
+          </p>
+        </div>
+
+        <div className="home-section">
+          <h2>Sobre o modelo</h2>
+          <p>
+            O modelo responde a uma pergunta epidemiológica: com o que se sabe de
+            um caso na hora da notificação, qual a chance de ele ser dengue
+            confirmada? Para isso, transformamos os dados brutos em variáveis
+            úteis, como os sintomas em forma binária e suas combinações, a
+            sazonalidade do ano em forma cíclica (a dengue tem pico no verão e no
+            outono), o perfil demográfico e a região de residência, já que a
+            endemicidade muda bastante pelo país. Comparamos modelos de árvore
+            (XGBoost, LightGBM, árvore de decisão) e regressão logística.
+          </p>
+          <p>
+            Também tomamos cuidado para o modelo não trapacear. Nenhuma
+            informação que só existe depois que o caso é encerrado entra como
+            variável, e o ano em si fica de fora, para que ele aprenda padrões que
+            se repetem em vez de decorar um ano específico. Como em vigilância é
+            pior deixar passar um caso real do que dar um alarme falso, o ponto de
+            decisão pode ser ajustado para errar menos os casos verdadeiros.
           </p>
         </div>
 
