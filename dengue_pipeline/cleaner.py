@@ -1,6 +1,9 @@
+from itertools import combinations
 from pathlib import Path
+
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import OrdinalEncoder
 
 from .paths import (
     PROJECT_ROOT,
@@ -72,8 +75,13 @@ ML_COLUMNS_TO_DROP = [
     "occupation_name",
     "residence_state_label",
     "hospital_state_label",
+    "final_classification_label",
     "notification_date",
+    "notification_day",
+    "notification_epi_week",
     "symptom_onset_date",
+    "hospitalized",
+    "hospital_state",
 ]
 
 
@@ -85,6 +93,9 @@ def ordenar_colunas_finais(df):
 
 class DengueDataCleaner:
     def __init__(self, arquivos=None):
+        self.occupation_encoder = None
+        self.days_to_notification_median = None
+
         if arquivos is None:
             arquivos = RAW_DENGUE_PARQUETS
         elif isinstance(arquivos, (str, Path)):
@@ -280,6 +291,18 @@ class DengueDataCleaner:
             "sex_label_Masculino": "sex_Male",
         }).copy()
 
+        # One Hot Encoding para race e residence_state: são códigos categóricos,
+        # não ordinais (UF 35 não é "maior" que UF 11, nem raça 4 > raça 1).
+        # Usamos o código numérico como nome da coluna (race_4, residence_state_35)
+        # para ter nomes estáveis/ASCII; NaN vira linha toda zero. Stateless = sem leakage.
+        for coluna_categorica in ["race", "residence_state"]:
+            df_tratado[coluna_categorica] = (
+                df_tratado[coluna_categorica].astype("Int64").astype("string")
+            )
+        df_tratado = pd.get_dummies(
+            df_tratado, columns=["race", "residence_state"], dtype=int
+        )
+
         # Analise ciclica de meses do ano e semanas epidemiológicas
         # Aqui, temos os meses representados num circulo --> (cos, sen)
         df_tratado["notification_month_sin"] = np.sin(2 * np.pi * df_tratado["notification_month"] / 12)
@@ -289,6 +312,16 @@ class DengueDataCleaner:
         df_tratado["symptom_epi_week_number_sin"] = np.sin(2 * np.pi * df_tratado["symptom_epi_week_number"] / 53)
         df_tratado["symptom_epi_week_number_cos"] = np.cos(2 * np.pi * df_tratado["symptom_epi_week_number"] / 53)
 
+        symptom_onset = pd.to_datetime(
+            df_tratado["symptom_onset_date"],
+            errors="coerce",
+        )
+        df_tratado["symptom_month"] = symptom_onset.dt.month
+        df_tratado["symptom_day"] = symptom_onset.dt.day
+        df_tratado["symptom_month_end"] = (
+            symptom_onset.dt.is_month_end.astype("int8")
+        )
+
         # Criar uma coluna para quantidade total de sintomas.
         sintomas = [
             "fever", "myalgia", "headache", "rash", "vomiting", "nausea",
@@ -296,8 +329,26 @@ class DengueDataCleaner:
             "petechiae", "retro_orbital_pain",
         ]
 
-        # Ja verifiquei: 1 para positivo e 2 para falso. Cada um tem 58 NaN
-        df_tratado[sintomas] = df_tratado[sintomas].replace(2, 0)
+        # SINAN: 1 = Sim, 2 = Não; ainda há ~58 NaN por coluna. Binarizamos com
+        # == 1 para que 2/NaN (e qualquer código != 1) virem 0, deixando as
+        # colunas prontas para o modelo (sem NaN). O tourniquet_test (prova do
+        # laço) entra junto na binarização, mas fica fora da contagem de sintomas.
+        colunas_sintomas = sintomas + ["tourniquet_test"]
+        df_tratado[colunas_sintomas] = (df_tratado[colunas_sintomas] == 1).astype(int)
+
+        interaction_columns = {
+            f"{symptom_a}_and_{symptom_b}": (
+                df_tratado[symptom_a] * df_tratado[symptom_b]
+            ).astype("int8")
+            for symptom_a, symptom_b in combinations(sintomas, 2)
+        }
+        df_tratado = pd.concat(
+            [
+                df_tratado,
+                pd.DataFrame(interaction_columns, index=df_tratado.index),
+            ],
+            axis=1,
+        )
 
         # Agora 1 = Tem ; 0 = Não tem
         df_tratado["number_of_symptoms"] = df_tratado[sintomas].sum(axis=1)
@@ -336,8 +387,16 @@ class DengueDataCleaner:
 
         df_tratado = df_tratado.drop(columns=["disease_code"])  # Disease_code todos são A90.
 
-        # Valores acima de 60 dias fazem parte de 1% dos dados; mantemos os 99% coerentes
-        df_tratado = df_tratado[(df_tratado["days_to_notification"] <= 60) | (df_tratado["days_to_notification"].isna())].copy()
+        days_to_notification = pd.to_numeric(
+            df_tratado["days_to_notification"],
+            errors="coerce",
+        )
+        self.days_to_notification_median = days_to_notification.median()
+        df_tratado["days_to_notification"] = (
+            days_to_notification
+            .fillna(self.days_to_notification_median)
+            .clip(0, 90)
+        )
 
         # Gravidez agora é binario, 1 para sim e 0 para não. Alem disso, temos agora uma coluna
         # binaria para dizer se a gravidez foi informada (exclui o caso dos homens e ignorado)
@@ -346,7 +405,19 @@ class DengueDataCleaner:
         df_tratado["pregnancy_informed"] = df_tratado["pregnancy_status"].isin([1, 2, 3, 4, 5]).astype(int)
         df_tratado = df_tratado.drop(columns=["pregnancy_status_label", "pregnancy_status"], errors="ignore").copy()
 
-        df_tratado["occupation_code"] = df_tratado["occupation_code"].astype("string")  # parquet reclamava do tipo
+        self.occupation_encoder = OrdinalEncoder(
+            handle_unknown="use_encoded_value",
+            unknown_value=-1,
+        )
+        occupation = df_tratado[["occupation_code"]].astype("string")
+        occupation = occupation.replace("0", pd.NA)
+        occupation = occupation.astype(object).where(occupation.notna(), np.nan)
+        df_tratado[["occupation_code"]] = (
+            self.occupation_encoder.fit_transform(occupation) + 1
+        )
+        df_tratado["occupation_code"] = (
+            df_tratado["occupation_code"].fillna(0).astype(int)
+        )
 
         # A data de início já está representada pelo ano, semana epidemiológica
         # e pelas versões cíclicas da semana.
