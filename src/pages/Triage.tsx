@@ -3,6 +3,7 @@ import CheckboxItem from "../components/CheckboxItem";
 import PatientForm from "../components/PatientForm";
 import Resultado from "../components/Resultado";
 import { avaliarDengue, triageItems } from "../services/dengueRules";
+import type { EvaluationResult } from "../services/dengueRules";
 import type { PatientData } from "../types/patient";
 
 const grupos = [
@@ -10,72 +11,61 @@ const grupos = [
     id: "symptoms",
     title: "Sintomas informados",
   },
+  {
+    id: "clinical",
+    title: "Sinais clínicos",
+  },
 ];
 
 function Triage() {
- const [patientData, setPatientData] = useState<PatientData>({
-  age: "",
-  ageYears: "",
+  const [patientData, setPatientData] = useState<PatientData>({
+    ageYears: "",
+    sex: "",
+    pregnancyStatus: "",
+    race: "",
+    educationLevel: "",
+    occupationCode: "",
+    residenceState: "",
+    residenceMunicipality: "",
+    residenceHealthRegion: "",
+    notificationDate: "",
+    symptomOnsetDate: "",
+    daysToNotification: "",
+    symptomEpiWeekNumber: "",
+  });
 
-  sex: "",
-  sexLabel: "",
-
-  pregnancyStatus: "",
-  pregnancyStatusLabel: "",
-
-  race: "",
-  raceLabel: "",
-
-  educationLevel: "",
-  educationLevelLabel: "",
-
-  occupationCode: "",
-  occupationName: "",
-
-  residenceState: "",
-  residenceStateLabel: "",
-  residenceMunicipality: "",
-  residenceHealthRegion: "",
-
-  diseaseCode: "",
-
-  notificationDate: "",
-  notificationYear: "",
-  notificationMonth: "",
-  notificationDay: "",
-  notificationEpiWeek: "",
-
-  notifMunicipality: "",
-  notifHealthRegion: "",
-  healthFacility: "",
-
-  symptomOnsetDate: "",
-  daysToNotification: "",
-  symptomEpiYear: "",
-  symptomEpiWeekNumber: "",
-
-  hospitalized: "",
-  hospitalState: "",
-  hospitalStateLabel: "",
-});
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [resultado, setResultado] = useState<ReturnType<typeof avaliarDengue> | null>(null);
+  const [resultado, setResultado] = useState<EvaluationResult | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   function toggleItem(id: string) {
     setSelectedItems((current) => {
       if (current.includes(id)) {
         return current.filter((item) => item !== id);
       }
-
       return [...current, id];
     });
   }
-  function handleEnviarTriagem() {
-  const resultadoFinal = avaliarDengue(selectedItems, patientData);
-  setResultado(resultadoFinal);
-}
 
-  
+  async function handleEnviarTriagem() {
+    setCarregando(true);
+    setErro(null);
+    setResultado(null);
+
+    try {
+      const resultadoFinal = await avaliarDengue(selectedItems, patientData);
+      setResultado(resultadoFinal);
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível concluir a triagem."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   return (
     <main className="container">
@@ -94,9 +84,9 @@ function Triage() {
         />
 
         {grupos.map((grupo) => {
-         const itensDoGrupo = triageItems.filter(
-  (item) => item.group === grupo.id
-);
+          const itensDoGrupo = triageItems.filter(
+            (item) => item.group === grupo.id
+          );
 
           return (
             <section className="grupo-sintomas" key={grupo.id}>
@@ -115,19 +105,29 @@ function Triage() {
             </section>
           );
         })}
-        <div className="actions">
-  <button type="button" className="btn-primary" onClick={handleEnviarTriagem}>
-    Enviar triagem
-  </button>
-</div>
 
-       {resultado && (
-  <Resultado
-    models={resultado.models}
-    average={resultado.average}
-    isDengue={resultado.isDengue}
-  />
-)}
+        <div className="actions">
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleEnviarTriagem}
+            disabled={carregando}
+          >
+            {carregando ? "Calculando..." : "Enviar triagem"}
+          </button>
+        </div>
+
+        {erro && (
+          <p style={{ color: "red", marginTop: "1rem" }}>{erro}</p>
+        )}
+
+        {resultado && (
+          <Resultado
+            models={resultado.models}
+            average={resultado.average}
+            isDengue={resultado.isDengue}
+          />
+        )}
       </section>
     </main>
   );

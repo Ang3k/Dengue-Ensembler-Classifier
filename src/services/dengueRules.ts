@@ -18,10 +18,25 @@ export type EvaluationResult = {
   isDengue: boolean;
 };
 
+export type PredictionPayload = Record<string, string | number | null>;
+
 // Acima deste valor (em %), o resultado final é considerado dengue
 export const DENGUE_THRESHOLD = 40;
 
-const MODEL_NAMES = ["Random Forest", "LightGBM", "XGBoost"];
+const API_URL = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:8000"
+).replace(/\/+$/, "");
+
+const MODEL_LABELS: Record<string, string> = {
+  logistic_regression: "Regressão logística",
+  xgboost: "XGBoost",
+  lightgbm: "LightGBM",
+  decision_tree: "Árvore de decisão",
+};
+
+export function formatModelName(name: string): string {
+  return MODEL_LABELS[name] ?? name;
+}
 
 export const triageItems: TriageItem[] = [
   {
@@ -104,58 +119,91 @@ export const triageItems: TriageItem[] = [
   },
 ];
 
+function numberOrNull(value: string): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function montarPayload(
+  selectedIds: string[],
+  patientData: PatientData
+): PredictionPayload {
+  const sintomas: PredictionPayload = {};
+  for (const item of triageItems) {
+    sintomas[item.id] = selectedIds.includes(item.id) ? 1 : 0;
+  }
+
+  return {
+    age_years: numberOrNull(patientData.ageYears),
+    sex: patientData.sex || null,
+    pregnancy_status: numberOrNull(patientData.pregnancyStatus),
+    race: numberOrNull(patientData.race),
+    education_level: numberOrNull(patientData.educationLevel),
+    occupation_code: patientData.occupationCode || null,
+    residence_state: numberOrNull(patientData.residenceState),
+    residence_municipality: numberOrNull(
+      patientData.residenceMunicipality
+    ),
+    residence_health_region: numberOrNull(
+      patientData.residenceHealthRegion
+    ),
+    notification_date: patientData.notificationDate || null,
+    symptom_onset_date: patientData.symptomOnsetDate || null,
+    days_to_notification: numberOrNull(patientData.daysToNotification),
+    symptom_epi_week_number: numberOrNull(
+      patientData.symptomEpiWeekNumber
+    ),
+    ...sintomas,
+  };
+}
+
+export async function solicitarPredicao(
+  payload: PredictionPayload
+): Promise<EvaluationResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(
+      "Não foi possível conectar à API. Verifique se o servidor está rodando."
+    );
+  }
+
+  if (!response.ok) {
+    let detail = `A API retornou o status ${response.status}.`;
+    try {
+      const errorBody = await response.json();
+      if (typeof errorBody.detail === "string") {
+        detail = errorBody.detail;
+      }
+    } catch {
+      // A resposta não contém JSON; usa a mensagem baseada no status.
+    }
+    throw new Error(detail);
+  }
+
+  const data: unknown = await response.json();
+  if (
+    !data ||
+    typeof data !== "object" ||
+    !Array.isArray((data as EvaluationResult).models) ||
+    typeof (data as EvaluationResult).average !== "number" ||
+    typeof (data as EvaluationResult).isDengue !== "boolean"
+  ) {
+    throw new Error("A API retornou uma resposta inválida.");
+  }
+
+  return data as EvaluationResult;
+}
+
 export function avaliarDengue(
   selectedIds: string[],
   patientData: PatientData
-): EvaluationResult {
-  const selectedItems = triageItems.filter((item) =>
-    selectedIds.includes(item.id)
-  );
-
-  const totalPoints = selectedItems.reduce((sum, item) => {
-    return sum + item.points;
-  }, 0);
-
-  const hasFever = selectedIds.includes("fever");
-
-  const age = Number(patientData.ageYears || patientData.age);
-
-  const isChild = age > 0 && age < 12;
-  const isOlderAdult = age >= 60;
-
-  const isPregnant =
-    patientData.pregnancyStatus === "1" ||
-    patientData.pregnancyStatus === "2" ||
-    patientData.pregnancyStatus === "3" ||
-    patientData.pregnancyStatus === "4";
-
-  const wasHospitalized = patientData.hospitalized === "1";
-
-  const daysToNotification = Number(patientData.daysToNotification);
-  const delayedNotification = daysToNotification > 5;
-
-  const hasRiskContext =
-    isChild || isOlderAdult || isPregnant || wasHospitalized || delayedNotification;
-
-  // Probabilidade base a partir dos sintomas e do contexto informado.
-  // Ainda é uma simulação — não vem de um modelo treinado de verdade.
-  const base = Math.max(
-    5,
-    Math.min(
-      95,
-      10 + totalPoints * 4 + (hasFever ? 12 : 0) + (hasRiskContext ? 8 : 0)
-    )
-  );
-
-  const models: ModelPrediction[] = MODEL_NAMES.map((name) => {
-    const variation = Math.random() * 16 - 8; // entre -8 e +8
-    const probability = Math.max(1, Math.min(99, Math.round(base + variation)));
-    return { name, probability };
-  });
-
-  const average = Math.round(
-    models.reduce((sum, model) => sum + model.probability, 0) / models.length
-  );
-
-  return { models, average, isDengue: average >= DENGUE_THRESHOLD };
+): Promise<EvaluationResult> {
+  return solicitarPredicao(montarPayload(selectedIds, patientData));
 }
