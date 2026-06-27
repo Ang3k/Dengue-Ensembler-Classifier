@@ -1,0 +1,17 @@
+﻿model,actual,predicted,count
+Regressão Logística,0,0,165
+Regressão Logística,0,1,218816
+Regressão Logística,1,0,65
+Regressão Logística,1,1,309562
+Árvore de Decisão,0,0,83348
+Árvore de Decisão,0,1,135633
+Árvore de Decisão,1,0,44477
+Árvore de Decisão,1,1,265150
+XGBoost,0,0,69092
+XGBoost,0,1,149889
+XGBoost,1,0,18187
+XGBoost,1,1,291440
+LightGBM,0,0,69452
+LightGBM,0,1,149529
+LightGBM,1,0,17779
+LightGBM,1,1,291848

@@ -27,4 +27,5 @@ artifacts/models/*.joblib
 *.sln
 *.sw?
 *.csv
+!reports/metrics/modeling/*.csv
 *.pyc
