@@ -2,77 +2,17 @@ import { useState } from "react";
 import {
   DENGUE_THRESHOLD,
   formatModelName,
-  solicitarPredicao,
-  triageItems,
+  solicitarSimulacaoRandom,
 } from "../services/dengueRules";
-import type { PredictionPayload } from "../services/dengueRules";
-
-// Valores baseados nos mapeamentos do dengue_pipeline
-const SEXOS = [
-  { label: "Masculino", code: "M" },
-  { label: "Feminino", code: "F" },
-];
-
-const RACAS = [
-  { label: "Branca", code: 1 },
-  { label: "Preta", code: 2 },
-  { label: "Amarela", code: 3 },
-  { label: "Parda", code: 4 },
-  { label: "Indígena", code: 5 },
-];
-
-const ESCOLARIDADES = [
-  { label: "Analfabeto", code: 1 },
-  { label: "Ensino fundamental completo", code: 4 },
-  { label: "Ensino médio incompleto", code: 5 },
-  { label: "Ensino médio completo", code: 6 },
-  { label: "Educação superior incompleta", code: 7 },
-  { label: "Educação superior completa", code: 8 },
-];
-
-const OCUPACOES = [
-  { label: "Estudante", code: "999991" },
-  { label: "Dona de casa", code: "999992" },
-  { label: "Trabalhador agropecuário em geral", code: "621005" },
-  { label: "Pedreiro", code: "715210" },
-  { label: "Motorista de carro de passeio", code: "782305" },
-  { label: "Vendedor de comércio varejista", code: "521110" },
-  {
-    label: "Professor de nível médio no ensino fundamental",
-    code: "331205",
-  },
-  { label: "Técnico de enfermagem", code: "322205" },
-  { label: "Auxiliar de escritório, em geral", code: "411005" },
-  { label: "Recepcionista, em geral", code: "422105" },
-  {
-    label: "Empregado doméstico nos serviços gerais",
-    code: "512105",
-  },
-  { label: "Cozinheiro geral", code: "513205" },
-  { label: "Vigilante", code: "517330" },
-  { label: "Operador de caixa", code: "421125" },
-];
-
-const SINTOMAS = triageItems.map(({ id, label }) => ({ id, label }));
-
-// UFs do Brasil com código IBGE
-const UFS = [
-  11, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31,
-  32, 33, 35, 41, 42, 43, 50, 51, 52, 53,
-];
-
-type SintomaItem = { label: string; id: string };
 
 type Pessoa = {
-  idade: number;
-  sexo: { label: string; code: string };
-  raca: { label: string; code: number };
-  escolaridade: { label: string; code: number };
-  ocupacao: { label: string; code: string };
-  sintomas: SintomaItem[];
-  residenceState: number;
-  notificationDate: string;
-  symptomOnsetDate: string;
+  idade: number | null;
+  sexo: string | null;
+  raca: string | null;
+  ocupacao: string | null;
+  estado: string | null;
+  municipio: string | null;
+  sintomas: string[];
 };
 
 type Predicao = {
@@ -81,90 +21,43 @@ type Predicao = {
   ehDengue: boolean;
 };
 
-function escolherAleatorio<T>(lista: T[]): T {
-  return lista[Math.floor(Math.random() * lista.length)];
-}
-
-function gerarPessoa(): Pessoa {
-  const sintomasEmbaralhados = [...SINTOMAS].sort(() => Math.random() - 0.5);
-  const quantidade = 2 + Math.floor(Math.random() * 4);
-  const inicioSintomas = new Date(
-    Date.UTC(
-      2019,
-      Math.floor(Math.random() * 12),
-      1 + Math.floor(Math.random() * 24)
-    )
-  );
-  const notificacao = new Date(inicioSintomas);
-  notificacao.setUTCDate(
-    notificacao.getUTCDate() + Math.floor(Math.random() * 8)
-  );
-
-  return {
-    idade: 1 + Math.floor(Math.random() * 89),
-    sexo: escolherAleatorio(SEXOS),
-    raca: escolherAleatorio(RACAS),
-    escolaridade: escolherAleatorio(ESCOLARIDADES),
-    ocupacao: escolherAleatorio(OCUPACOES),
-    sintomas: sintomasEmbaralhados.slice(0, quantidade),
-    residenceState: escolherAleatorio(UFS),
-    notificationDate: notificacao.toISOString().slice(0, 10),
-    symptomOnsetDate: inicioSintomas.toISOString().slice(0, 10),
-  };
-}
-
-async function chamarAPI(pessoa: Pessoa): Promise<Predicao> {
-  const sintomasPayload: Record<string, number> = {};
-  for (const s of SINTOMAS) {
-    sintomasPayload[s.id] = pessoa.sintomas.some((ps) => ps.id === s.id) ? 1 : 0;
-  }
-
-  const payload: PredictionPayload = {
-    age_years: pessoa.idade,
-    sex: pessoa.sexo.code,
-    race: pessoa.raca.code,
-    education_level: pessoa.escolaridade.code,
-    occupation_code: pessoa.ocupacao.code,
-    residence_state: pessoa.residenceState,
-    notification_date: pessoa.notificationDate,
-    symptom_onset_date: pessoa.symptomOnsetDate,
-    ...sintomasPayload,
-  };
-
-  const data = await solicitarPredicao(payload);
-  return {
-    modelos: data.models,
-    media: data.average,
-    ehDengue: data.isDengue,
-  };
-}
-
 function PredictionSimulator() {
   const [pessoa, setPessoa] = useState<Pessoa | null>(null);
   const [predicao, setPredicao] = useState<Predicao | null>(null);
+  const [classificacaoObservada, setClassificacaoObservada] =
+    useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  function handleGerar() {
-    setPessoa(gerarPessoa());
-    setPredicao(null);
-    setErro(null);
-  }
-
-  async function handleRodarPredicao() {
-    if (!pessoa) return;
+  async function handleGerar() {
     setCarregando(true);
     setErro(null);
+    setPessoa(null);
     setPredicao(null);
+    setClassificacaoObservada(null);
 
     try {
-      const resultado = await chamarAPI(pessoa);
-      setPredicao(resultado);
+      const resultado = await solicitarSimulacaoRandom();
+      setPessoa({
+        idade: resultado.case.age,
+        sexo: resultado.case.sex,
+        raca: resultado.case.race,
+        ocupacao: resultado.case.occupation,
+        estado: resultado.case.state,
+        municipio: resultado.case.municipality,
+        sintomas: resultado.case.symptoms,
+      });
+      setClassificacaoObservada(resultado.observedClassification);
+      setPredicao({
+        modelos: resultado.prediction.models,
+        media: resultado.prediction.average,
+        ehDengue: resultado.prediction.isDengue,
+      });
     } catch (error) {
       setErro(
         error instanceof Error
           ? error.message
-          : "Não foi possível concluir a predição."
+          : "Não foi possível carregar a simulação histórica."
       );
     } finally {
       setCarregando(false);
@@ -175,13 +68,13 @@ function PredictionSimulator() {
     <div className="home-section">
       <h2>Simulação de predição</h2>
       <p>
-        Gere uma pessoa com dados aleatórios e rode a predição para ver como o
-        sistema funciona: os modelos treinados avaliam o caso, cada um com sua
-        probabilidade, e a média define o resultado final.
+        Gere um caso histórico real do conjunto de teste e veja a predição dos
+        modelos treinados. O backend seleciona o caso, aplica o mesmo
+        pré-processamento do treino e retorna o resultado completo.
       </p>
 
       <button type="button" className="btn-primary" onClick={handleGerar}>
-        Gerar pessoa aleatória
+        {carregando ? "Carregando caso histórico..." : "Gerar simulação real"}
       </button>
 
       {pessoa && (
@@ -189,31 +82,29 @@ function PredictionSimulator() {
           <div className="sim-dados">
             <div className="sim-campo">
               <span className="sim-label">Idade</span>
-              <span className="sim-valor">{pessoa.idade} anos</span>
+              <span className="sim-valor">
+                {pessoa.idade !== null ? `${pessoa.idade} anos` : "Não informado"}
+              </span>
             </div>
             <div className="sim-campo">
               <span className="sim-label">Sexo</span>
-              <span className="sim-valor">{pessoa.sexo.label}</span>
+              <span className="sim-valor">{pessoa.sexo ?? "Não informado"}</span>
             </div>
             <div className="sim-campo">
               <span className="sim-label">Raça/cor</span>
-              <span className="sim-valor">{pessoa.raca.label}</span>
+              <span className="sim-valor">{pessoa.raca ?? "Não informado"}</span>
             </div>
             <div className="sim-campo">
-              <span className="sim-label">Escolaridade</span>
-              <span className="sim-valor">{pessoa.escolaridade.label}</span>
+              <span className="sim-label">UF</span>
+              <span className="sim-valor">{pessoa.estado ?? "Não informado"}</span>
             </div>
             <div className="sim-campo sim-campo-largo">
               <span className="sim-label">Ocupação</span>
-              <span className="sim-valor">{pessoa.ocupacao.label}</span>
+              <span className="sim-valor">{pessoa.ocupacao ?? "Não informado"}</span>
             </div>
-            <div className="sim-campo">
-              <span className="sim-label">Início dos sintomas</span>
-              <span className="sim-valor">{pessoa.symptomOnsetDate}</span>
-            </div>
-            <div className="sim-campo">
-              <span className="sim-label">Notificação</span>
-              <span className="sim-valor">{pessoa.notificationDate}</span>
+            <div className="sim-campo sim-campo-largo">
+              <span className="sim-label">Município</span>
+              <span className="sim-valor">{pessoa.municipio ?? "Não informado"}</span>
             </div>
           </div>
 
@@ -221,21 +112,19 @@ function PredictionSimulator() {
             <span className="sim-label">Sintomas informados</span>
             <div className="sim-tags">
               {pessoa.sintomas.map((sintoma) => (
-                <span key={sintoma.id} className="sim-tag">
-                  {sintoma.label}
+                <span key={sintoma} className="sim-tag">
+                  {sintoma}
                 </span>
               ))}
             </div>
           </div>
 
-          <button
-            type="button"
-            className="btn-predicao"
-            onClick={handleRodarPredicao}
-            disabled={carregando}
-          >
-            {carregando ? "Calculando..." : "Rodar predição"}
-          </button>
+          {classificacaoObservada && (
+            <div className="sim-media">
+              <span className="sim-label">Classificação observada</span>
+              <span className="sim-valor-destaque">{classificacaoObservada}</span>
+            </div>
+          )}
 
           {erro && (
             <p style={{ color: "red", marginTop: "1rem" }}>{erro}</p>
