@@ -26,6 +26,9 @@ RAW_DENGUE_CSVS = tuple(
     for year in (17, 18, 19)
 )
 
+RAW_DENGUE_2019_PARQUET = RAW_PARQUET_DIR / "DENGBR19.parquet"
+SIMULATION_SOURCE_PARQUET = RAW_DENGUE_2019_PARQUET
+
 ML_DATASET_PATH = PROCESSED_DATA_DIR / "dengue_tratado_ml.parquet"
 
 # Encoders ajustados no treino (OrdinalEncoder de ocupação e UF), usados pela API

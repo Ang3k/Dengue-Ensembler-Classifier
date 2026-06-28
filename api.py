@@ -15,7 +15,7 @@ from itertools import combinations
 import logging
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import joblib
 import numpy as np
@@ -23,6 +23,16 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from dengue_pipeline.paths import SIMULATION_SOURCE_PARQUET
+from dengue_pipeline.sinan_mappings import (
+    DENGUE_CLASSIFICATION_LABELS,
+    SEX_LABELS,
+    RACE_LABELS,
+    UF_ABBR_LABELS,
+    add_sinan_cbo_labels,
+    standardize_columns,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +212,26 @@ MAP_ESCOLARIDADE = {0: 1, 1: 2, 2: 2, 3: 2, 4: 3, 5: 4, 6: 4, 7: 5, 8: 5, 9: 0, 
 MAP_SEXO_LABEL = {"M": "Masculino", "F": "Feminino", "I": "Ignorado"}
 
 RACE_CODES = [1, 2, 3, 4, 5, 9]
+
+SIMULATION_YEAR = 2019
+SIMULATION_NOTIFICATION_MONTH_MIN = 6
+
+SIMULATION_SYMPTOM_LABELS = {
+    "fever": "Febre",
+    "myalgia": "Mialgia",
+    "headache": "Cefaleia",
+    "rash": "Exantema",
+    "vomiting": "Vomito",
+    "nausea": "Nausea",
+    "back_pain": "Dor nas costas",
+    "conjunctivitis": "Conjuntivite",
+    "arthritis": "Artrite",
+    "joint_pain": "Dor nas articulacoes",
+    "petechiae": "Petequias",
+    "retro_orbital_pain": "Dor retro-orbital",
+}
+
+_simulation_pool: pd.DataFrame | None = None
 
 
 def _encodar_ordinal(encoder, valor, coluna, como_int64: bool):
@@ -422,6 +452,192 @@ def _inferir_modelos(df: pd.DataFrame):
         "average": media,
         "isDengue": media >= 40,
         "ignored": ignorados,
+    }
+
+
+def _to_int(value: Any) -> int | None:
+    if value is None or pd.isna(value):
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _one_of(value: Any, allowed: set[int]) -> int | None:
+    parsed = _to_int(value)
+    if parsed in allowed:
+        return parsed
+    return None
+
+
+def _parse_age_years(encoded_age: Any) -> float | None:
+    age = _to_int(encoded_age)
+    if age is None:
+        return None
+
+    # SINAN usa unidade + quantidade no formato UYYY (ex.: 4025 = 25 anos).
+    text = str(age).zfill(4)
+    unit = int(text[0])
+    value = int(text[1:])
+
+    if unit == 4:
+        years = float(value)
+    elif unit == 3:
+        years = float(value) / 12
+    elif unit == 2:
+        years = float(value) / 365
+    elif unit == 1:
+        years = float(value) / 8760
+    else:
+        years = float(age) if 0 <= age <= 130 else None
+
+    if years is None or years < 0 or years > 130:
+        return None
+    return years
+
+
+def _to_date(value: Any) -> date | None:
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.date()
+
+
+def _to_occupation_code(value: Any) -> str | None:
+    code = _to_int(value)
+    if code is None or code <= 0:
+        return None
+    code_text = str(code)
+    return code_text if len(code_text) in (5, 6) else None
+
+
+def _flag_from_sinan(value: Any) -> int:
+    return int(_to_int(value) == 1)
+
+
+def _build_patient_from_sample(row: pd.Series) -> DadosPaciente:
+    notification_date = _to_date(row.get("notification_date"))
+    symptom_onset_date = _to_date(row.get("symptom_onset_date"))
+
+    symptom_epi_week_raw = _to_int(row.get("symptom_epi_week"))
+    symptom_epi_week_number = None
+    if symptom_epi_week_raw is not None:
+        symptom_epi_week_number = symptom_epi_week_raw % 100
+
+    return DadosPaciente(
+        age_years=_parse_age_years(row.get("age")),
+        sex=row.get("sex") if row.get("sex") in {"M", "F", "I"} else None,
+        pregnancy_status=_one_of(row.get("pregnancy_status"), {1, 2, 3, 4, 5, 6, 9}),
+        race=_one_of(row.get("race"), {1, 2, 3, 4, 5, 9}),
+        education_level=_to_int(row.get("education_level")),
+        occupation_code=_to_occupation_code(row.get("occupation_code")),
+        residence_state=_to_int(row.get("residence_state")),
+        residence_municipality=_to_int(row.get("residence_municipality")),
+        residence_health_region=_to_int(row.get("residence_health_region")),
+        notification_date=notification_date,
+        notification_year=(notification_date.year if notification_date else None),
+        notification_month=(notification_date.month if notification_date else None),
+        notification_epi_week=_to_int(row.get("notification_epi_week")),
+        notif_municipality=_to_int(row.get("notif_municipality")),
+        notif_health_region=_to_int(row.get("notif_health_region")),
+        health_facility=_to_int(row.get("health_facility")),
+        symptom_onset_date=symptom_onset_date,
+        days_to_notification=_to_int(row.get("days_to_notification")),
+        symptom_epi_year=(symptom_onset_date.year if symptom_onset_date else None),
+        symptom_epi_week_number=symptom_epi_week_number,
+        fever=_flag_from_sinan(row.get("fever")),
+        myalgia=_flag_from_sinan(row.get("myalgia")),
+        headache=_flag_from_sinan(row.get("headache")),
+        rash=_flag_from_sinan(row.get("rash")),
+        vomiting=_flag_from_sinan(row.get("vomiting")),
+        nausea=_flag_from_sinan(row.get("nausea")),
+        back_pain=_flag_from_sinan(row.get("back_pain")),
+        conjunctivitis=_flag_from_sinan(row.get("conjunctivitis")),
+        arthritis=_flag_from_sinan(row.get("arthritis")),
+        joint_pain=_flag_from_sinan(row.get("joint_pain")),
+        petechiae=_flag_from_sinan(row.get("petechiae")),
+        retro_orbital_pain=_flag_from_sinan(row.get("retro_orbital_pain")),
+        tourniquet_test=_flag_from_sinan(row.get("tourniquet_test")),
+        hospitalized=_one_of(row.get("hospitalized"), {1, 2, 9}),
+        hospital_state=_to_int(row.get("hospital_state")),
+    )
+
+
+def _anonymized_case_from_sample(row: pd.Series, patient: DadosPaciente) -> dict[str, Any]:
+    symptom_labels = [
+        label
+        for key, label in SIMULATION_SYMPTOM_LABELS.items()
+        if getattr(patient, key, 0) == 1
+    ]
+
+    age = int(round(patient.age_years)) if patient.age_years is not None else None
+    state_code = _to_int(row.get("residence_state"))
+    municipality_code = _to_int(row.get("residence_municipality"))
+    occupation_name = row.get("occupation_name")
+
+    return {
+        "age": age,
+        "sex": SEX_LABELS.get(patient.sex),
+        "race": RACE_LABELS.get(patient.race),
+        "occupation": None if pd.isna(occupation_name) else str(occupation_name),
+        "state": UF_ABBR_LABELS.get(state_code),
+        "municipality": str(municipality_code) if municipality_code is not None else None,
+        "symptoms": symptom_labels,
+    }
+
+
+def _load_simulation_pool() -> pd.DataFrame:
+    global _simulation_pool
+    if _simulation_pool is not None:
+        return _simulation_pool
+
+    if not SIMULATION_SOURCE_PARQUET.exists():
+        raise HTTPException(
+            status_code=503,
+            detail=f"Base da simulacao nao encontrada: {SIMULATION_SOURCE_PARQUET}",
+        )
+
+    raw_df = pd.read_parquet(SIMULATION_SOURCE_PARQUET)
+    df = standardize_columns(raw_df)
+    df = add_sinan_cbo_labels(df)
+
+    notification_dates = pd.to_datetime(df.get("notification_date"), errors="coerce")
+    years = pd.to_numeric(df.get("notification_year"), errors="coerce")
+    months = notification_dates.dt.month
+
+    filtered = df[
+        (years == SIMULATION_YEAR)
+        & (months >= SIMULATION_NOTIFICATION_MONTH_MIN)
+    ].copy()
+
+    if filtered.empty:
+        raise HTTPException(
+            status_code=503,
+            detail="Nenhum caso elegivel para simulacao na base historica",
+        )
+
+    _simulation_pool = filtered.reset_index(drop=True)
+    return _simulation_pool
+
+
+def escolher_caso_real_simulacao(seed: int | None = None) -> dict[str, Any]:
+    pool = _load_simulation_pool()
+
+    rng = np.random.default_rng(seed)
+    sampled_idx = int(rng.integers(0, len(pool)))
+    row = pool.iloc[sampled_idx]
+
+    patient = _build_patient_from_sample(row)
+    observed = row.get("final_classification_label")
+    if observed is None or pd.isna(observed):
+        observed = DENGUE_CLASSIFICATION_LABELS.get(_to_int(row.get("final_classification")))
+
+    return {
+        "sampled_index": sampled_idx,
+        "patient": patient,
+        "case": _anonymized_case_from_sample(row, patient),
+        "observed_classification": observed,
     }
 
 
