@@ -364,51 +364,12 @@ def alinhar_colunas(df: pd.DataFrame, modelo):
     return df[esperadas].astype("float32"), []
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
-
-@app.get("/health")
-def health():
-    faltantes = [
-        nome for nome in MODELOS_DISPONIVEIS if nome not in modelos
-    ]
-    preprocess_pronto = all(
-        [
-            OCCUPATION_ENCODER is not None,
-            RESIDENCE_STATE_ENCODER is not None,
-            "days_to_notification_median" in preprocess,
-        ]
-    )
-    return {
-        "status": "ok" if not faltantes and preprocess_pronto else "degraded",
-        "modelos_carregados": list(modelos.keys()),
-        "modelos_ausentes": faltantes,
-        "erros_carregamento": erros_carregamento,
-        "preprocess_carregado": preprocess_pronto,
-    }
-
-
-@app.post("/predict")
-def predict(dados: DadosPaciente):
-    if not modelos:
-        raise HTTPException(
-            status_code=503,
-            detail="Nenhum modelo foi carregado",
-        )
-    if OCCUPATION_ENCODER is None or RESIDENCE_STATE_ENCODER is None:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Pré-processamento indisponível. Gere "
-                "artifacts/models/ml_preprocess.joblib no notebook de modelagem."
-            ),
-        )
-
-    df = construir_features(dados)
-
+def _inferir_modelos(df: pd.DataFrame):
+    """Executa a inferência em todos os modelos carregados para um vetor de
+    features já construído."""
     resultados = []
     ignorados = []
+
     for nome, modelo in modelos.items():
         df_alinhado, faltantes = alinhar_colunas(df.copy(), modelo)
         if df_alinhado is None:
@@ -456,10 +417,55 @@ def predict(dados: DadosPaciente):
         )
 
     media = round(sum(r["probability"] for r in resultados) / len(resultados), 1)
-
     return {
         "models": resultados,
         "average": media,
         "isDengue": media >= 40,
         "ignored": ignorados,
     }
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/health")
+def health():
+    faltantes = [
+        nome for nome in MODELOS_DISPONIVEIS if nome not in modelos
+    ]
+    preprocess_pronto = all(
+        [
+            OCCUPATION_ENCODER is not None,
+            RESIDENCE_STATE_ENCODER is not None,
+            "days_to_notification_median" in preprocess,
+        ]
+    )
+    return {
+        "status": "ok" if not faltantes and preprocess_pronto else "degraded",
+        "modelos_carregados": list(modelos.keys()),
+        "modelos_ausentes": faltantes,
+        "erros_carregamento": erros_carregamento,
+        "preprocess_carregado": preprocess_pronto,
+    }
+
+
+@app.post("/predict")
+def predict(dados: DadosPaciente):
+    if not modelos:
+        raise HTTPException(
+            status_code=503,
+            detail="Nenhum modelo foi carregado",
+        )
+    if OCCUPATION_ENCODER is None or RESIDENCE_STATE_ENCODER is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Pré-processamento indisponível. Gere "
+                "artifacts/models/ml_preprocess.joblib no notebook de modelagem."
+            ),
+        )
+
+    df = construir_features(dados)
+
+    return _inferir_modelos(df)
