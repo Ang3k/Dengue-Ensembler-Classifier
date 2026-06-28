@@ -194,6 +194,12 @@ class DadosPaciente(BaseModel):
         return self
 
 
+class SimulacaoRandomRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    seed: int | None = Field(default=None, ge=0)
+
+
 # ---------------------------------------------------------------------------
 # Pré-processamento — replica o transformar_ml() do cleaner
 # ---------------------------------------------------------------------------
@@ -685,3 +691,53 @@ def predict(dados: DadosPaciente):
     df = construir_features(dados)
 
     return _inferir_modelos(df)
+
+
+@app.post("/api/v1/simulations/random")
+def simulation_random(payload: SimulacaoRandomRequest | None = None):
+    if not modelos:
+        raise HTTPException(
+            status_code=503,
+            detail="Nenhum modelo foi carregado",
+        )
+    if OCCUPATION_ENCODER is None or RESIDENCE_STATE_ENCODER is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Pré-processamento indisponível. Gere "
+                "artifacts/models/ml_preprocess.joblib no notebook de modelagem."
+            ),
+        )
+
+    ausentes = [nome for nome in MODELOS_DISPONIVEIS if nome not in modelos]
+    if ausentes:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Nem todos os modelos necessários foram carregados",
+                "missing": ausentes,
+            },
+        )
+
+    sample = escolher_caso_real_simulacao(seed=(payload.seed if payload else None))
+    features = construir_features(sample["patient"])
+    prediction = _inferir_modelos(features)
+
+    if prediction["ignored"]:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Nem todos os modelos conseguiram gerar predição",
+                "ignored": prediction["ignored"],
+            },
+        )
+
+    return {
+        "case": sample["case"],
+        "observedClassification": sample["observed_classification"],
+        "prediction": {
+            "models": prediction["models"],
+            "average": prediction["average"],
+            "isDengue": prediction["isDengue"],
+        },
+    }
