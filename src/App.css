@@ -74,6 +74,15 @@ select:focus-visible {
   letter-spacing: -0.3px;
 }
 
+.navbar-brand-version {
+  display: inline-block;
+  margin-left: 0.45em;
+  font-size: 0.6em;
+  font-weight: 800;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+
 .navbar-links {
   display: flex;
   align-items: center;
