@@ -120,9 +120,13 @@ function PredictionSimulator() {
           </div>
 
           {classificacaoObservada && (
-            <div className="sim-media">
+            <div className="sim-media sim-media-observada">
               <span className="sim-label">Classificação observada</span>
               <span className="sim-valor-destaque">{classificacaoObservada}</span>
+              <small className="sim-media-apoio">
+                Este é o diagnóstico registrado na base histórica. Pode divergir
+                da predição dos modelos.
+              </small>
             </div>
           )}
 

@@ -400,6 +400,17 @@ h1 {
   border-top: 1px solid #e2e8f0;
 }
 
+.sim-media-observada {
+  flex-wrap: wrap;
+}
+
+.sim-media-apoio {
+  flex-basis: 100%;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
 .sim-veredito {
   display: flex;
   flex-direction: column;
