@@ -190,7 +190,7 @@ type PatientFormProps = {
 
 function PatientForm({ patientData, setPatientData }: PatientFormProps) {
   const [options, setOptions] = useState<TriageOptions | null>(null);
-  const [regioesResidencia, setRegioesResidencia] = useState<RegiaoItem[]>([]);
+  const [, setRegioesResidencia] = useState<RegiaoItem[]>([]);
 
   // Carrega opções da API uma vez
   useEffect(() => {
