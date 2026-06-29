@@ -48,10 +48,9 @@ MODELS_DIR = Path(__file__).parent / "artifacts" / "models"
 PREPROCESS_PATH = MODELS_DIR / "ml_preprocess.joblib"
 
 MODELOS_DISPONIVEIS = {
-    "logistic_regression": "logistic_regression.joblib",
+    "mlp":                 "mlp.joblib",
     "xgboost":             "xgboost.joblib",
     "lightgbm":            "lightgbm.joblib",
-    "decision_tree":       "decision_tree.joblib",
 }
 
 modelos = {}
@@ -71,6 +70,8 @@ for nome, arquivo in MODELOS_DISPONIVEIS.items():
                 modelo_interno.set_params(
                     device=os.getenv("XGBOOST_DEVICE", "cpu")
                 )
+        elif nome == "mlp" and hasattr(modelo, "device"):
+            modelo.device = os.getenv("MLP_DEVICE", "auto")
         modelos[nome] = modelo
         logger.info("Modelo %s carregado", nome)
     except Exception as exc:

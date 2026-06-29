@@ -48,10 +48,9 @@ const API_URL = (
 ).replace(/\/+$/, "");
 
 const MODEL_LABELS: Record<string, string> = {
-  logistic_regression: "Regressão logística",
+  mlp: "MLP",
   xgboost: "XGBoost",
   lightgbm: "LightGBM",
-  decision_tree: "Árvore de decisão",
 };
 
 export function formatModelName(name: string): string {

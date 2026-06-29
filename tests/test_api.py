@@ -35,6 +35,12 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual(features.loc[0, "days_to_notification"], 3)
         self.assertTrue(np.isfinite(features.to_numpy()).all())
 
+    def test_required_models_are_mlp_xgboost_and_lightgbm(self):
+        self.assertEqual(
+            set(api.MODELOS_DISPONIVEIS),
+            {"mlp", "xgboost", "lightgbm"},
+        )
+
     def test_every_loaded_model_receives_all_expected_columns(self):
         if not api.modelos:
             self.skipTest("nenhum artefato de modelo disponível")
@@ -190,7 +196,7 @@ class ApiTestCase(unittest.TestCase):
         if not api._MUNICIPIOS_REF:
             self.skipTest("data/municipios.json não encontrado")
 
-        result = api.buscar_municipios(query="rio", limit=20)
+        result = api.buscar_municipios(query="rio", state=None, limit=20)
 
         self.assertIn("items", result)
         self.assertGreater(len(result["items"]), 0)
@@ -215,7 +221,7 @@ class ApiTestCase(unittest.TestCase):
         if not api._MUNICIPIOS_REF:
             self.skipTest("data/municipios.json não encontrado")
 
-        result = api.buscar_municipios(query="rio de", limit=5)
+        result = api.buscar_municipios(query="rio de", state=None, limit=5)
         items = result["items"]
 
         if items:
