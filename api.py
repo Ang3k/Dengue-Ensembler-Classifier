@@ -95,7 +95,7 @@ OCCUPATION_ENCODER = preprocess.get("occupation_encoder")
 RESIDENCE_STATE_ENCODER = preprocess.get("residence_state_encoder")
 DAYS_TO_NOTIFICATION_MEDIAN = preprocess.get("days_to_notification_median", 0.0)
 
-# Calculados no conjunto de validação pelo notebook model_evaluation.ipynb.
+# Valores calculados pelo notebook model_evaluation.ipynb.
 # Cada peso é o recall do modelo dividido pela soma dos três recalls.
 ENSEMBLE_WEIGHTS = {
     "mlp": 0.33245651147532945,
