@@ -144,6 +144,28 @@ function numberOrNull(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function mensagemErroApi(errorBody: unknown, status: number): string {
+  if (!errorBody || typeof errorBody !== "object") {
+    return `A API retornou o status ${status}.`;
+  }
+
+  const detail = (errorBody as { detail?: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (!Array.isArray(detail)) return `A API retornou o status ${status}.`;
+
+  const messages = detail.flatMap(issue => {
+    if (!issue || typeof issue !== "object") return [];
+    const { loc, msg } = issue as { loc?: unknown[]; msg?: unknown };
+    if (typeof msg !== "string") return [];
+    const field = Array.isArray(loc) ? String(loc.at(-1) ?? "") : "";
+    return [field ? `${field}: ${msg}` : msg];
+  });
+
+  return messages.length > 0
+    ? messages.join(" | ")
+    : `A API retornou o status ${status}.`;
+}
+
 export function montarPayload(
   selectedIds: string[],
   patientData: PatientData
@@ -197,9 +219,7 @@ export async function solicitarPredicao(
     let detail = `A API retornou o status ${response.status}.`;
     try {
       const errorBody = await response.json();
-      if (typeof errorBody.detail === "string") {
-        detail = errorBody.detail;
-      }
+      detail = mensagemErroApi(errorBody, response.status);
     } catch {
       // A resposta não contém JSON; usa a mensagem baseada no status.
     }
@@ -242,9 +262,7 @@ export async function solicitarSimulacaoRandom(
     let detail = `A API retornou o status ${response.status}.`;
     try {
       const errorBody = await response.json();
-      if (typeof errorBody.detail === "string") {
-        detail = errorBody.detail;
-      }
+      detail = mensagemErroApi(errorBody, response.status);
     } catch {
       // A resposta não contém JSON; usa a mensagem baseada no status.
     }
@@ -277,5 +295,17 @@ export function avaliarDengue(
   selectedIds: string[],
   patientData: PatientData
 ): Promise<EvaluationResult> {
+  if (
+    patientData.notificationDate &&
+    patientData.symptomOnsetDate &&
+    patientData.notificationDate < patientData.symptomOnsetDate
+  ) {
+    return Promise.reject(
+      new Error(
+        "A data da notificação não pode ser anterior ao início dos sintomas."
+      )
+    );
+  }
+
   return solicitarPredicao(montarPayload(selectedIds, patientData));
 }
