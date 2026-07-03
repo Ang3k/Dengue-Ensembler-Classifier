@@ -4,6 +4,7 @@ import argparse
 import gc
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -140,7 +141,14 @@ def load_models(manifest: dict) -> dict:
             raise RuntimeError(f"{name} filename differs from model manifest")
         if not path.exists() or entry.get("sha256") != file_sha256(path):
             raise RuntimeError(f"{name} SHA-256 differs from model manifest")
-        loaded[name] = joblib.load(path)
+        model = joblib.load(path)
+        if name == "xgboost":
+            internal_model = getattr(model, "model", None)
+            if hasattr(internal_model, "set_params"):
+                internal_model.set_params(
+                    device=os.getenv("XGBOOST_DEVICE", "cpu")
+                )
+        loaded[name] = model
     return loaded
 
 
@@ -347,9 +355,17 @@ def main() -> None:
     if args.ensemble_threshold is not None:
         ensemble_threshold = round(float(args.ensemble_threshold), 4)
         threshold_rule = "manual_operating_point"
+        ensemble_reported = threshold_metrics(
+            "ensemble",
+            "validation",
+            y_validation.to_numpy(),
+            ensemble_validation,
+            np.asarray([ensemble_threshold]),
+        ).iloc[0]
     else:
         ensemble_threshold = float(ensemble_selected["threshold"])
         threshold_rule = "max_balanced_accuracy"
+        ensemble_reported = ensemble_selected
     ensemble_validation_metrics["selected"] = np.isclose(
         ensemble_validation_metrics["threshold"],
         ensemble_threshold,
@@ -360,7 +376,7 @@ def main() -> None:
             "model": "ensemble",
             "selection_split": "validation",
             "rule": threshold_rule,
-            **ensemble_selected.to_dict(),
+            **ensemble_reported.to_dict(),
             "threshold": ensemble_threshold,
         }
     )

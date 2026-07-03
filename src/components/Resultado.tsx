@@ -19,7 +19,7 @@ function Resultado({
               {formatModelName(modelo.name)}
             </span>
             <span className="modelo-quadrado-prob">{modelo.probability}%</span>
-            <span className="modelo-quadrado-legenda">prob. de dengue</span>
+            <span className="modelo-quadrado-legenda">score de dengue</span>
             <span className="modelo-quadrado-peso">
               Peso no ensemble: {modelo.weight}%
             </span>

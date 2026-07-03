@@ -33,6 +33,8 @@ from dengue_pipeline.models import (  # noqa: E402
 )
 from dengue_pipeline.paths import (  # noqa: E402
     EXPECTED_SPLIT_ROWS,
+    LOCAL_DENSITY_LOOKUP_PATH,
+    LOCAL_POSITIVITY_LOOKUP_PATH,
     MODEL_FIGURES_DIR,
     MODEL_MANIFEST_PATH,
     MODELS_DIR,
@@ -102,7 +104,7 @@ def save_feature_importance(name: str, importance) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Train dengue models with the 2014-2020 temporal split."
+        description="Train dengue models with the 2017-2020 temporal split."
     )
     parser.add_argument("--n-trials", type=int, default=50)
     parser.add_argument("--max-epochs", type=int, default=150)
@@ -250,6 +252,16 @@ def main() -> None:
                 "sha256": file_sha256(MODELS_DIR / f"{name}.joblib"),
             }
             for name in models
+        },
+        "context_lookups": {
+            "local_density": {
+                "file": LOCAL_DENSITY_LOOKUP_PATH.name,
+                "sha256": file_sha256(LOCAL_DENSITY_LOOKUP_PATH),
+            },
+            "local_positivity": {
+                "file": LOCAL_POSITIVITY_LOOKUP_PATH.name,
+                "sha256": file_sha256(LOCAL_POSITIVITY_LOOKUP_PATH),
+            },
         },
     }
     temporary = MODEL_MANIFEST_PATH.with_suffix(".json.part")

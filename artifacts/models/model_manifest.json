@@ -142,5 +142,15 @@
       "file": "lightgbm.joblib",
       "sha256": "8d786b494f7f57961e47d460e791edcddbcf5121e8c67159bf8bfc28a87fd354"
     }
+  },
+  "context_lookups": {
+    "local_density": {
+      "file": "local_density_lookup.parquet",
+      "sha256": "6d1223d6f15f500d7973504cc24888ebc0b97a3187ed45bfc14ab77219dc5747"
+    },
+    "local_positivity": {
+      "file": "local_positivity_lookup.parquet",
+      "sha256": "8203a8073270ccb7453ac37940178de3b13e5040b7501ad29c375b13b1e7c7df"
+    }
   }
 }

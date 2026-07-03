@@ -166,13 +166,16 @@ def build_local_density_lookup(frame: pd.DataFrame) -> pd.DataFrame:
     density = compute_local_density(frame)
     table = pd.DataFrame(
         {
+            "notification_year": _numeric(frame, "notification_year"),
             "residence_municipality": _numeric(
                 frame, "residence_municipality"
             ),
             "epi_week_of_year": _numeric(frame, "notification_epi_week") % 100,
             "local_density": density,
         }
-    ).dropna()
+    ).dropna().drop_duplicates(
+        ["notification_year", "residence_municipality", "epi_week_of_year"]
+    )
     return (
         table.groupby(["residence_municipality", "epi_week_of_year"])[
             "local_density"
@@ -193,9 +196,14 @@ def compute_local_positivity(frame: pd.DataFrame) -> pd.Series:
     year = _numeric(frame, "notification_year").astype("float64")
     municipality = _numeric(frame, "residence_municipality").astype("float64")
     week = (_numeric(frame, "notification_epi_week") % 100).astype("float64")
-    code = _numeric(frame, "final_classification_code")
-    confirmed = code.isin([10, 11, 12]).astype("float64")
-    labeled = code.isin([10, 11, 12, 5]).astype("float64")
+    target = _numeric(frame, "final_classification")
+    if target.isna().all():
+        code = _numeric(frame, "final_classification_code")
+        target = pd.Series(np.nan, index=frame.index, dtype="float64")
+        target.loc[code.isin([10, 11, 12])] = 1.0
+        target.loc[code.eq(5)] = 0.0
+    confirmed = target.eq(1).astype("float64")
+    labeled = target.isin([0, 1]).astype("float64")
 
     keys = pd.DataFrame(
         {"y": year, "m": municipality, "w": week, "c": confirmed, "n": labeled}
@@ -246,13 +254,16 @@ def build_local_positivity_lookup(frame: pd.DataFrame) -> pd.DataFrame:
     positivity = compute_local_positivity(frame)
     table = pd.DataFrame(
         {
+            "notification_year": _numeric(frame, "notification_year"),
             "residence_municipality": _numeric(
                 frame, "residence_municipality"
             ),
             "epi_week_of_year": _numeric(frame, "notification_epi_week") % 100,
             "local_positivity": positivity,
         }
-    ).dropna()
+    ).dropna().drop_duplicates(
+        ["notification_year", "residence_municipality", "epi_week_of_year"]
+    )
     return (
         table.groupby(["residence_municipality", "epi_week_of_year"])[
             "local_positivity"

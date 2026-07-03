@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { API_URL } from "../services/dengueRules";
 import type { PatientData } from "../types/patient";
-
-const API_URL = "http://localhost:8000";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -10,7 +9,7 @@ const API_URL = "http://localhost:8000";
 type SelectOption = { code: number | string; name: string };
 type UfOption = { code: number; sigla: string; name: string };
 type MunicipioItem = { code: number; name: string; stateCode: number; state: string };
-type RegiaoItem = { code: number; name: string; state: string };
+type RegiaoItem = { code: number; name: string; state: string; officialCode?: number };
 type AutocompleteItem = { code: number | string; name: string; state?: string; stateCode?: number };
 
 type TriageOptions = {
@@ -26,21 +25,49 @@ type TriageOptions = {
 // ---------------------------------------------------------------------------
 
 function calcularSemanaEpi(data: Date): { semana: number; ano: number } {
-  // Primeiro dia do ano
-  const inicio = new Date(data.getFullYear(), 0, 1);
-  const diaSemana = inicio.getDay(); // 0 = domingo
-  // Recua até o domingo anterior (ou fica no mesmo se já for domingo)
-  const primeiroDomingo = new Date(inicio);
-  primeiroDomingo.setDate(inicio.getDate() - diaSemana);
-  const diff = Math.floor(
-    (data.getTime() - primeiroDomingo.getTime()) / (7 * 24 * 60 * 60 * 1000)
+  const quarta = new Date(data);
+  quarta.setUTCDate(data.getUTCDate() + (3 - data.getUTCDay()));
+  const ano = quarta.getUTCFullYear();
+  const primeiroDeJaneiro = new Date(Date.UTC(ano, 0, 1));
+  const primeiraQuarta = new Date(primeiroDeJaneiro);
+  primeiraQuarta.setUTCDate(
+    primeiroDeJaneiro.getUTCDate()
+      + ((3 - primeiroDeJaneiro.getUTCDay() + 7) % 7)
   );
-  const semana = diff + 1;
-  // Se cair antes da semana 1, pertence ao último período do ano anterior
-  if (semana < 1) {
-    return calcularSemanaEpi(new Date(data.getFullYear() - 1, 11, 31));
-  }
-  return { semana, ano: data.getFullYear() };
+  const semana = Math.floor(
+    (quarta.getTime() - primeiraQuarta.getTime()) / (7 * 24 * 60 * 60 * 1000)
+  ) + 1;
+  return { semana, ano };
+}
+
+function parseDate(value: string): Date | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function atualizarCamposDeData(
+  current: PatientData,
+  field: "symptomOnsetDate" | "notificationDate",
+  value: string
+): PatientData {
+  const next = { ...current, [field]: value };
+  const onset = parseDate(next.symptomOnsetDate);
+  const notification = parseDate(next.notificationDate);
+  const epi = onset ? calcularSemanaEpi(onset) : null;
+  const days = onset && notification && notification >= onset
+    ? Math.round(
+        (notification.getTime() - onset.getTime()) / (24 * 60 * 60 * 1000)
+      )
+    : null;
+
+  return {
+    ...next,
+    symptomEpiWeekNumber: epi ? String(epi.semana) : "",
+    symptomEpiYear: epi ? String(epi.ano) : "",
+    daysToNotification: days === null ? "" : String(days),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -48,30 +75,65 @@ function calcularSemanaEpi(data: Date): { semana: number; ano: number } {
 // ---------------------------------------------------------------------------
 
 function useAutocomplete(
+  query: string,
   fetchFn: (q: string) => Promise<AutocompleteItem[]>,
   delay = 300
 ) {
-  const [query, setQuery] = useState("");
   const [items, setItems] = useState<AutocompleteItem[]>([]);
   const [aberto, setAberto] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestVersion = useRef(0);
+  const selectedQuery = useRef<string | null>(null);
+
+  const close = useCallback(() => {
+    requestVersion.current += 1;
+    setItems([]);
+    setAberto(false);
+  }, []);
+
+  const queryChanged = useCallback((value: string) => {
+    if (value.trim().length < 2) close();
+  }, [close]);
+
+  const itemSelected = useCallback((value: string) => {
+    selectedQuery.current = value;
+    close();
+  }, [close]);
 
   useEffect(() => {
-    if (query.length < 2) {
-      setItems([]);
-      setAberto(false);
+    if (selectedQuery.current === query) {
+      selectedQuery.current = null;
       return;
     }
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      const resultado = await fetchFn(query);
-      setItems(resultado);
-      setAberto(resultado.length > 0);
-    }, delay);
-    return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [query]);
+    if (query.trim().length < 2) return;
 
-  return { query, setQuery, items, aberto, setAberto };
+    const version = requestVersion.current + 1;
+    requestVersion.current = version;
+    const timer = window.setTimeout(async () => {
+      try {
+        const resultado = await fetchFn(query);
+        if (requestVersion.current !== version) return;
+        setItems(resultado);
+        setAberto(resultado.length > 0);
+      } catch {
+        if (requestVersion.current !== version) return;
+        setItems([]);
+        setAberto(false);
+      }
+    }, delay);
+    return () => {
+      window.clearTimeout(timer);
+      requestVersion.current += 1;
+    };
+  }, [delay, fetchFn, query]);
+
+  return {
+    items,
+    aberto,
+    setAberto,
+    close,
+    queryChanged,
+    itemSelected,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -83,38 +145,49 @@ type AutocompleteProps = {
   id: string;
   placeholder: string;
   fetchFn: (q: string) => Promise<AutocompleteItem[]>;
-  onSelect: (item: AutocompleteItem) => void;
+  onSelect: (item: AutocompleteItem, label: string) => void;
+  onInputChange: (value: string) => void;
   renderLabel?: (item: AutocompleteItem) => string;
-  displayValue: string;
+  value: string;
 };
 
 function Autocomplete({
-  label, id, placeholder, fetchFn, onSelect, renderLabel, displayValue,
+  label,
+  id,
+  placeholder,
+  fetchFn,
+  onSelect,
+  onInputChange,
+  renderLabel,
+  value,
 }: AutocompleteProps) {
-  const { query, setQuery, items, aberto, setAberto } = useAutocomplete(fetchFn);
+  const {
+    items,
+    aberto,
+    setAberto,
+    close,
+    queryChanged,
+    itemSelected,
+  } = useAutocomplete(value, fetchFn);
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusIndex, setFocusIndex] = useState(-1);
+  const listId = `${id}-options`;
 
   // Fecha ao clicar fora
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setAberto(false);
+        close();
       }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  // Sincroniza texto exibido com valor externo (ex: ao limpar o form)
-  useEffect(() => {
-    if (!displayValue) setQuery("");
-  }, [displayValue]);
+  }, [close]);
 
   function handleSelect(item: AutocompleteItem) {
-    onSelect(item);
-    setQuery(renderLabel ? renderLabel(item) : item.name);
-    setAberto(false);
+    const selectedLabel = renderLabel ? renderLabel(item) : item.name;
+    itemSelected(selectedLabel);
+    onSelect(item, selectedLabel);
     setFocusIndex(-1);
   }
 
@@ -132,14 +205,22 @@ function Autocomplete({
       <input
         id={id}
         type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={aberto}
+        aria-controls={listId}
         autoComplete="off"
         placeholder={placeholder}
-        value={query}
-        onChange={e => setQuery(e.target.value)}
+        value={value}
+        onChange={event => {
+          queryChanged(event.target.value);
+          onInputChange(event.target.value);
+          setFocusIndex(-1);
+        }}
         onKeyDown={handleKeyDown}
       />
       {aberto && (
-        <ul className="autocomplete-list" role="listbox">
+        <ul className="autocomplete-list" role="listbox" id={listId}>
           {items.map((item, idx) => (
             <li
               key={item.code}
@@ -190,62 +271,55 @@ type PatientFormProps = {
 
 function PatientForm({ patientData, setPatientData }: PatientFormProps) {
   const [options, setOptions] = useState<TriageOptions | null>(null);
-  const [, setRegioesResidencia] = useState<RegiaoItem[]>([]);
+  const [regioesResidencia, setRegioesResidencia] = useState<RegiaoItem[]>([]);
+  const [erroOpcoes, setErroOpcoes] = useState<string | null>(null);
 
   // Carrega opções da API uma vez
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/triage/options`)
-      .then(r => r.json())
-      .then((data) =>
+    const controller = new AbortController();
+    async function carregarOpcoes() {
+      try {
+        const response = await fetch(`${API_URL}/api/v1/triage/options`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`status ${response.status}`);
+        const data = await response.json();
         setOptions({
           sexos: data.sexos,
           racas: data.racas,
           escolaridades: data.escolaridades,
           situacoesGestacao: data.situacoesGestacao,
           ufs: data.ufs,
-        })
-      )
-      .catch(() => {});
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setErroOpcoes(
+          "Não foi possível carregar as opções da triagem. Verifique a API."
+        );
+      }
+    }
+    void carregarOpcoes();
+    return () => controller.abort();
   }, []);
-
-  // Recalcula semana epi e dias ao mudar datas
-  useEffect(() => {
-    const onset = patientData.symptomOnsetDate
-      ? new Date(patientData.symptomOnsetDate + "T00:00:00")
-      : null;
-    const notif = patientData.notificationDate
-      ? new Date(patientData.notificationDate + "T00:00:00")
-      : null;
-
-    if (onset) {
-      const { semana, ano } = calcularSemanaEpi(onset);
-      setPatientData(prev => ({
-        ...prev,
-        symptomEpiWeekNumber: String(semana),
-        symptomEpiYear: String(ano),
-      }));
-    }
-
-    if (onset && notif && notif >= onset) {
-      const dias = Math.round(
-        (notif.getTime() - onset.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      setPatientData(prev => ({ ...prev, daysToNotification: String(dias) }));
-    }
-  }, [patientData.symptomOnsetDate, patientData.notificationDate]);
 
   function set(field: keyof PatientData, value: string) {
     setPatientData(prev => ({ ...prev, [field]: value }));
   }
 
-  async function aoSelecionarMunicipio(item: AutocompleteItem) {
+  async function aoSelecionarMunicipio(
+    item: AutocompleteItem,
+    selectedLabel: string
+  ) {
     const mun = item as MunicipioItem;
     const uf = options?.ufs.find(u => u.code === mun.stateCode);
     setPatientData(prev => ({
       ...prev,
       residenceMunicipality: String(mun.code),
+      residenceMunicipalityName: selectedLabel,
       residenceState: mun.stateCode ? String(mun.stateCode) : prev.residenceState,
       residenceStateLabel: uf?.sigla ?? prev.residenceStateLabel,
+      residenceHealthRegion: "",
+      residenceHealthRegionName: "",
     }));
 
     try {
@@ -256,9 +330,17 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
       const regioes: RegiaoItem[] = data.items ?? [];
       setRegioesResidencia(regioes);
       if (regioes.length === 1) {
-        set("residenceHealthRegion", String(regioes[0].code));
+        setPatientData(prev => ({
+          ...prev,
+          residenceHealthRegion: String(regioes[0].code),
+          residenceHealthRegionName: regioes[0].name,
+        }));
       } else if (regioes.length === 0) {
-        set("residenceHealthRegion", "");
+        setPatientData(prev => ({
+          ...prev,
+          residenceHealthRegion: "",
+          residenceHealthRegionName: "",
+        }));
       }
     } catch {
       setRegioesResidencia([]);
@@ -268,10 +350,15 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
   const selectedStateCode = patientData.residenceState
     ? Number(patientData.residenceState)
     : undefined;
+  const fetchMunicipios = useMemo(
+    () => makeFetchMunicipios(selectedStateCode),
+    [selectedStateCode]
+  );
 
   return (
     <section className="patient-form">
       <h2>Dados usados pelo modelo</h2>
+      {erroOpcoes && <p role="alert" className="form-error">{erroOpcoes}</p>}
 
       <div className="form-grid">
 
@@ -339,10 +426,20 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
             label="Ocupação"
             placeholder="Digite para buscar (ex: médico, professor...)"
             fetchFn={fetchOcupacoes}
-            displayValue={patientData.occupationName ?? ""}
-            onSelect={item => {
-              set("occupationCode", String(item.code));
-              set("occupationName", item.name);
+            value={patientData.occupationName}
+            onInputChange={value => {
+              setPatientData(prev => ({
+                ...prev,
+                occupationCode: "",
+                occupationName: value,
+              }));
+            }}
+            onSelect={(item, selectedLabel) => {
+              setPatientData(prev => ({
+                ...prev,
+                occupationCode: String(item.code),
+                occupationName: selectedLabel,
+              }));
             }}
           />
           {patientData.occupationCode && (
@@ -363,7 +460,9 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
                 residenceState: e.target.value,
                 residenceStateLabel: uf?.sigla ?? "",
                 residenceMunicipality: "",
+                residenceMunicipalityName: "",
                 residenceHealthRegion: "",
+                residenceHealthRegionName: "",
               }));
               setRegioesResidencia([]);
             }}
@@ -380,11 +479,22 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
         {/* Município de residência: autocomplete */}
         <div className="form-group form-group-wide">
           <Autocomplete
+            key={patientData.residenceState}
             id="residenceMunicipality"
             label="Município de residência"
             placeholder="Digite para buscar (ex: Rio de Janeiro...)"
-            fetchFn={makeFetchMunicipios(selectedStateCode)}
-            displayValue={patientData.residenceMunicipality}
+            fetchFn={fetchMunicipios}
+            value={patientData.residenceMunicipalityName}
+            onInputChange={value => {
+              setPatientData(prev => ({
+                ...prev,
+                residenceMunicipality: "",
+                residenceMunicipalityName: value,
+                residenceHealthRegion: "",
+                residenceHealthRegionName: "",
+              }));
+              setRegioesResidencia([]);
+            }}
             onSelect={aoSelecionarMunicipio}
             renderLabel={item =>
               item.state ? `${item.name} (${item.state})` : item.name
@@ -395,8 +505,35 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
           )}
         </div>
 
-        {/* Região de saúde: preenchida automaticamente ou select se houver mais de uma */}
-       
+        {/* Região de saúde: preenchida automaticamente ou selecionável. */}
+        {regioesResidencia.length > 0 && (
+          <div className="form-group form-group-wide">
+            <label htmlFor="residenceHealthRegion">Região de saúde</label>
+            <select
+              id="residenceHealthRegion"
+              value={patientData.residenceHealthRegion}
+              onChange={event => {
+                const selected = regioesResidencia.find(
+                  item => String(item.code) === event.target.value
+                );
+                setPatientData(prev => ({
+                  ...prev,
+                  residenceHealthRegion: event.target.value,
+                  residenceHealthRegionName: selected?.name ?? "",
+                }));
+              }}
+            >
+              {regioesResidencia.length > 1 && (
+                <option value="">Selecione</option>
+              )}
+              {regioesResidencia.map(regiao => (
+                <option key={regiao.code} value={regiao.code}>
+                  {regiao.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Data dos primeiros sintomas */}
         <div className="form-group">
@@ -405,7 +542,15 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
             id="symptomOnsetDate"
             type="date"
             value={patientData.symptomOnsetDate}
-            onChange={e => set("symptomOnsetDate", e.target.value)}
+            onChange={event =>
+              setPatientData(prev =>
+                atualizarCamposDeData(
+                  prev,
+                  "symptomOnsetDate",
+                  event.target.value
+                )
+              )
+            }
           />
         </div>
 
@@ -416,7 +561,15 @@ function PatientForm({ patientData, setPatientData }: PatientFormProps) {
             id="notificationDate"
             type="date"
             value={patientData.notificationDate}
-            onChange={e => set("notificationDate", e.target.value)}
+            onChange={event =>
+              setPatientData(prev =>
+                atualizarCamposDeData(
+                  prev,
+                  "notificationDate",
+                  event.target.value
+                )
+              )
+            }
           />
         </div>
 

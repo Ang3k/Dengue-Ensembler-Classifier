@@ -8,7 +8,6 @@ import type { PatientData } from "../types/patient";
 
 const grupos = [
   { id: "symptoms", title: "Sintomas informados" },
-  { id: "clinical",  title: "Sinais clínicos" },
 ];
 
 const estadoInicial: PatientData = {
@@ -22,7 +21,9 @@ const estadoInicial: PatientData = {
   residenceState: "",
   residenceStateLabel: "",
   residenceMunicipality: "",
+  residenceMunicipalityName: "",
   residenceHealthRegion: "",
+  residenceHealthRegionName: "",
   notificationDate: "",
   symptomOnsetDate: "",
   daysToNotification: "",
@@ -66,9 +67,9 @@ function Triage() {
       <section className="card">
         <h1>Triagem de Dengue</h1>
         <p>
-          Preencha os dados principais do paciente e marque os sinais, sintomas
-          e condições abaixo. O sistema fará uma triagem baseada nos principais
-          campos usados na ficha de dengue do Sinan.
+          Preencha os dados do paciente e marque os sintomas informados. O
+          sistema fará uma triagem baseada nos campos disponíveis na notificação
+          de dengue do Sinan.
         </p>
 
         <PatientForm patientData={patientData} setPatientData={setPatientData} />

@@ -17,11 +17,12 @@ import os
 from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
+import unicodedata
 
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import (
     BaseModel,
@@ -75,6 +76,10 @@ MODELOS_DISPONIVEIS = {
     "xgboost":             "xgboost.joblib",
     "lightgbm":            "lightgbm.joblib",
 }
+CONTEXT_LOOKUPS = {
+    "local_density": LOCAL_DENSITY_LOOKUP_PATH,
+    "local_positivity": LOCAL_POSITIVITY_LOOKUP_PATH,
+}
 
 
 def _load_json(path: Path) -> dict:
@@ -127,10 +132,18 @@ model_manifest_compatible = (
     and model_manifest.get("periods", {}).get("test") == list(TEST_YEARS)
     and model_manifest.get("row_counts") == EXPECTED_SPLIT_ROWS
 )
+context_lookups_compatible = all(
+    path.exists()
+    and model_manifest.get("context_lookups", {}).get(name, {}).get("file")
+    == path.name
+    and model_manifest.get("context_lookups", {}).get(name, {}).get("sha256")
+    == _sha256_file(path)
+    for name, path in CONTEXT_LOOKUPS.items()
+)
 ensemble_config_compatible = (
     ensemble_config.get("feature_schema_version") == FEATURE_SCHEMA_VERSION
-    and ensemble_config.get("selection_period") == [2020]
-    and ensemble_config.get("test_period") == [2021]
+    and ensemble_config.get("selection_period") == list(VALIDATION_YEARS)
+    and ensemble_config.get("test_period") == list(TEST_YEARS)
     and set(ensemble_config.get("weights", {})) == set(MODELOS_DISPONIVEIS)
     and ensemble_values_valid
     and MODEL_MANIFEST_PATH.exists()
@@ -138,7 +151,9 @@ ensemble_config_compatible = (
     == _sha256_file(MODEL_MANIFEST_PATH)
 )
 artifact_set_compatible = (
-    model_manifest_compatible and ensemble_config_compatible
+    model_manifest_compatible
+    and context_lookups_compatible
+    and ensemble_config_compatible
 )
 
 modelos = {}
@@ -211,7 +226,7 @@ app.add_middleware(
 # Schema de entrada — campos que o frontend já envia
 # ---------------------------------------------------------------------------
 
-def _semana_epidemiologica(dia: date) -> int:
+def _ano_semana_epidemiologica(dia: date) -> tuple[int, int]:
     """Semana epidemiológica (convenção MMWR/SINAN: semana começa no domingo,
     a semana 1 é a que contém a maioria — a quarta-feira — no ano novo).
 
@@ -225,7 +240,12 @@ def _semana_epidemiologica(dia: date) -> int:
     jan1 = date(ano, 1, 1)
     jan1_wday = (jan1.weekday() + 1) % 7
     primeira_quarta = jan1 + timedelta(days=(3 - jan1_wday) % 7)
-    return (quarta - primeira_quarta).days // 7 + 1
+    semana = (quarta - primeira_quarta).days // 7 + 1
+    return ano, semana
+
+
+def _semana_epidemiologica(dia: date) -> int:
+    return _ano_semana_epidemiologica(dia)[1]
 
 
 class DadosPaciente(BaseModel):
@@ -291,6 +311,19 @@ class DadosPaciente(BaseModel):
             raise ValueError("use um código IBGE de UF válido")
         return valor
 
+    @field_validator("residence_municipality", mode="before")
+    @classmethod
+    def normalizar_codigo_municipio(cls, valor):
+        if valor is None:
+            return None
+        try:
+            codigo = int(valor)
+        except (TypeError, ValueError):
+            return valor
+        # A API do IBGE usa sete dígitos (com dígito verificador), enquanto os
+        # extratos do SINAN e os modelos usam os seis primeiros.
+        return codigo // 10 if 1_000_000 <= codigo <= 9_999_999 else codigo
+
     @model_validator(mode="after")
     def validar_datas(self):
         if (
@@ -314,6 +347,12 @@ class DadosPaciente(BaseModel):
             )
         if self.notification_year is None and self.notification_date is not None:
             self.notification_year = self.notification_date.year
+        if self.symptom_onset_date is not None:
+            ano, semana = _ano_semana_epidemiologica(self.symptom_onset_date)
+            if self.symptom_epi_week_number is None:
+                self.symptom_epi_week_number = semana
+            if self.symptom_epi_year is None:
+                self.symptom_epi_year = ano
         return self
 
 
@@ -430,10 +469,14 @@ def _carregar_lookup(path: Path, coluna: str) -> dict[tuple[int, int], float]:
         return {}
 
 
-LOCAL_DENSITY_LOOKUP = _carregar_lookup(LOCAL_DENSITY_LOOKUP_PATH, "local_density")
+LOCAL_DENSITY_LOOKUP = (
+    _carregar_lookup(LOCAL_DENSITY_LOOKUP_PATH, "local_density")
+    if context_lookups_compatible
+    else {}
+)
 LOCAL_POSITIVITY_LOOKUP = _carregar_lookup(
     LOCAL_POSITIVITY_LOOKUP_PATH, "local_positivity"
-)
+) if context_lookups_compatible else {}
 
 
 def _consultar_local(
@@ -583,6 +626,18 @@ def _inferir_modelos(df: pd.DataFrame):
     }
 
 
+def _exigir_conjunto_completo_de_modelos() -> None:
+    ausentes = [nome for nome in MODELOS_DISPONIVEIS if nome not in modelos]
+    if ausentes:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Nem todos os modelos necessários foram carregados",
+                "missing": ausentes,
+            },
+        )
+
+
 def _to_int(value: Any) -> int | None:
     if value is None or pd.isna(value):
         return None
@@ -707,6 +762,7 @@ def _anonymized_case_from_sample(row: pd.Series, patient: DadosPaciente) -> dict
     age = int(round(patient.age_years)) if patient.age_years is not None else None
     state_code = _to_int(row.get("residence_state"))
     municipality_code = _to_int(row.get("residence_municipality"))
+    municipality = _MUNICIPIOS_BY_SINAN_CODE.get(municipality_code)
     occupation_name = row.get("occupation_name")
 
     return {
@@ -715,7 +771,15 @@ def _anonymized_case_from_sample(row: pd.Series, patient: DadosPaciente) -> dict
         "race": RACE_LABELS.get(patient.race),
         "occupation": None if pd.isna(occupation_name) else str(occupation_name),
         "state": UF_ABBR_LABELS.get(state_code),
-        "municipality": str(municipality_code) if municipality_code is not None else None,
+        "municipality": (
+            municipality["name"]
+            if municipality is not None
+            else (
+                str(municipality_code)
+                if municipality_code is not None
+                else None
+            )
+        ),
         "symptoms": symptom_labels,
     }
 
@@ -903,6 +967,11 @@ def health():
         "erros_carregamento": erros_carregamento,
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "artefatos_compativeis": artifact_set_compatible,
+        "lookups_contexto_compativeis": context_lookups_compatible,
+        "lookups_contexto": {
+            "local_density": len(LOCAL_DENSITY_LOOKUP),
+            "local_positivity": len(LOCAL_POSITIVITY_LOOKUP),
+        },
         "periodos": model_manifest.get("periods", {}),
         "ensemble_threshold": ENSEMBLE_THRESHOLD,
         "ensemble_weights": ENSEMBLE_WEIGHTS,
@@ -911,11 +980,7 @@ def health():
 
 @app.post("/predict")
 def predict(dados: DadosPaciente):
-    if not modelos:
-        raise HTTPException(
-            status_code=503,
-            detail="Nenhum modelo foi carregado",
-        )
+    _exigir_conjunto_completo_de_modelos()
     df = construir_features(dados)
 
     return _inferir_modelos(df)
@@ -923,20 +988,7 @@ def predict(dados: DadosPaciente):
 
 @app.post("/api/v1/simulations/random")
 def simulation_random(payload: SimulacaoRandomRequest | None = None):
-    if not modelos:
-        raise HTTPException(
-            status_code=503,
-            detail="Nenhum modelo foi carregado",
-        )
-    ausentes = [nome for nome in MODELOS_DISPONIVEIS if nome not in modelos]
-    if ausentes:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "Nem todos os modelos necessários foram carregados",
-                "missing": ausentes,
-            },
-        )
+    _exigir_conjunto_completo_de_modelos()
 
     sample = escolher_caso_real_simulacao(seed=(payload.seed if payload else None))
     # Caso histórico: usa a densidade/positividade EXATAS de 2021 (as que o modelo
@@ -969,20 +1021,13 @@ def simulation_random(payload: SimulacaoRandomRequest | None = None):
         },
     }
 
-# ===========================================================================
-# NOVOS ENDPOINTS — Pessoa 2
-# ===========================================================================
-
-import unicodedata as _unicodedata
-from fastapi import Query as _Query
-
 # ---------------------------------------------------------------------------
 # Dados de referência — municípios
 # ---------------------------------------------------------------------------
 
 def _norm(texto: str) -> str:
     return (
-        _unicodedata.normalize("NFKD", texto.lower())
+        unicodedata.normalize("NFKD", texto.lower())
         .encode("ascii", "ignore")
         .decode()
     )
@@ -1007,6 +1052,10 @@ def _carregar_municipios_ref() -> list[dict]:
     return resultado
 
 _MUNICIPIOS_REF = _carregar_municipios_ref()
+_MUNICIPIOS_BY_SINAN_CODE = {
+    int(municipio["code"]) // 10: municipio
+    for municipio in _MUNICIPIOS_REF
+}
 
 # Regiões de saúde por município (carrega data/regioes_saude.json se existir)
 def _carregar_regioes_ref() -> dict[int, list[dict]]:
@@ -1071,6 +1120,9 @@ def triage_options():
         ],
         "ufs": ufs,
         "modelosAtivos": list(modelos.keys()),
+        "limiarClassificacao": DENGUE_THRESHOLD,
+        # Compatibilidade temporária com clientes que consumiam a chave grafada
+        # incorretamente antes da versão 1.0.
         "liamiarClassificacao": DENGUE_THRESHOLD,
         "pesosModelos": ENSEMBLE_WEIGHTS,
     }
@@ -1082,8 +1134,8 @@ def triage_options():
 
 @app.get("/api/v1/references/occupations")
 def buscar_ocupacoes(
-    query: str = _Query(..., min_length=2),
-    limit: int = _Query(10, ge=1, le=50),
+    query: str = Query(..., min_length=2),
+    limit: int = Query(10, ge=1, le=50),
 ):
     """Busca ocupações CBO por nome. Prioriza matches que começam com o texto."""
     q = _norm(query)
@@ -1099,9 +1151,9 @@ def buscar_ocupacoes(
 
 @app.get("/api/v1/references/municipalities")
 def buscar_municipios(
-    query: str = _Query(..., min_length=2),
-    state: int | None = _Query(None),
-    limit: int = _Query(20, ge=1, le=100),
+    query: str = Query(..., min_length=2),
+    state: int | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
 ):
     """Busca municípios por nome, com filtro opcional por código IBGE da UF."""
     if not _MUNICIPIOS_REF:
@@ -1132,7 +1184,7 @@ def buscar_municipios(
 # ---------------------------------------------------------------------------
 
 @app.get("/api/v1/references/health-regions")
-def buscar_regioes_saude(municipality: int = _Query(...)):
+def buscar_regioes_saude(municipality: int = Query(...)):
     """Retorna as regiões de saúde associadas a um município (código IBGE)."""
     regioes = _REGIOES_REF.get(municipality, [])
     return {"items": regioes}

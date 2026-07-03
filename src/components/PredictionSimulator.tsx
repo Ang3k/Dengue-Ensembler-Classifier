@@ -126,22 +126,26 @@ function PredictionSimulator() {
           </div>
 
           {/* Meio: bloquinhos dos modelos */}
-          <span className="sim-label">Resultado dos modelos</span>
-          <div className="modelo-quadrados">
-            {predicao.modelos.map((modelo) => (
-              <div className="modelo-quadrado" key={modelo.name}>
-                <span className="modelo-quadrado-nome">
-                  {formatModelName(modelo.name)}
-                </span>
-                <span className="modelo-quadrado-prob">
-                  {modelo.probability}%
-                </span>
-                <span className="modelo-quadrado-legenda">prob. de dengue</span>
-                <span className="modelo-quadrado-peso">
-                  Peso no ensemble: {modelo.weight}%
-                </span>
-              </div>
-            ))}
+          <div className="sim-bloco">
+            <span className="sim-label">Resultado dos modelos</span>
+            <div className="modelo-quadrados">
+              {predicao.modelos.map((modelo) => (
+                <div className="modelo-quadrado" key={modelo.name}>
+                  <span className="modelo-quadrado-nome">
+                    {formatModelName(modelo.name)}
+                  </span>
+                  <span className="modelo-quadrado-prob">
+                    {modelo.probability}%
+                  </span>
+                  <span className="modelo-quadrado-legenda">
+                    score de dengue
+                  </span>
+                  <span className="modelo-quadrado-peso">
+                    Peso no ensemble: {modelo.weight}%
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Baixo: previsão final (esquerda) x realidade (direita) */}

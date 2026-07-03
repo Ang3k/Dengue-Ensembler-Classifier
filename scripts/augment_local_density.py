@@ -33,6 +33,7 @@ from dengue_pipeline.paths import (  # noqa: E402
     DENGUE_YEARS,
     LOCAL_DENSITY_LOOKUP_PATH,
     LOCAL_POSITIVITY_LOOKUP_PATH,
+    TRAIN_YEARS,
     analysis_dataset_path,
     ml_dataset_path,
 )
@@ -42,6 +43,7 @@ _ANALYSIS_COLUMNS = [
     "notification_epi_week",
     "notification_year",
     "final_classification_code",
+    "final_classification",
 ]
 
 
@@ -74,7 +76,8 @@ def main() -> None:
         ml["local_positivity"] = positivity.to_numpy()
         _atomic_write(ml, ml_path)
 
-        lookup_frames.append(analysis)
+        if year in TRAIN_YEARS:
+            lookup_frames.append(analysis)
         print(
             f"[{year}] local_density + local_positivity gravadas em "
             f"{ml_path.name} | cobertura dens={pd.notna(density).mean():.3%} "
@@ -89,8 +92,9 @@ def main() -> None:
     _atomic_write(density_lookup, LOCAL_DENSITY_LOOKUP_PATH)
     _atomic_write(positivity_lookup, LOCAL_POSITIVITY_LOOKUP_PATH)
     print(
-        f"Lookups de serving escritos: densidade ({len(density_lookup):,} pares) "
-        f"e positividade ({len(positivity_lookup):,} pares)"
+        f"Lookups de serving de {TRAIN_YEARS} escritos: densidade "
+        f"({len(density_lookup):,} pares) e positividade "
+        f"({len(positivity_lookup):,} pares)"
     )
 
 

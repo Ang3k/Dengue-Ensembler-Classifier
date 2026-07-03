@@ -21,9 +21,9 @@ function Home() {
           <p>
             Na página de <strong>Triagem</strong>, você preenche os dados
             principais do paciente (idade, sexo, gestação, entre outros) e marca
-            os sintomas e achados clínicos observados. O sistema combina essas
-            informações e devolve uma probabilidade de o caso ser dengue, junto
-            com uma orientação.
+            os sintomas informados. O sistema combina essas informações e
+            devolve um score de compatibilidade com dengue, junto com uma
+            orientação.
           </p>
           <p>
             Já a página de <strong>Panorama Epidemiológico</strong> reúne os

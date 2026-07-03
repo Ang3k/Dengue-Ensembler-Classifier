@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 import pandas as pd
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 import api
@@ -45,7 +46,15 @@ class ApiTestCase(unittest.TestCase):
 
     def test_api_and_pipeline_build_identical_features(self):
         expected = build_model_features(
-            pd.DataFrame([self.patient.model_dump()])
+            pd.DataFrame([self.patient.model_dump()]),
+            local_density=api._consultar_local(
+                self.patient,
+                api.LOCAL_DENSITY_LOOKUP,
+            ),
+            local_positivity=api._consultar_local(
+                self.patient,
+                api.LOCAL_POSITIVITY_LOOKUP,
+            ),
         )
         pd.testing.assert_frame_equal(
             api.construir_features(self.patient),
@@ -95,6 +104,22 @@ class ApiTestCase(unittest.TestCase):
                 notification_date="2019-03-01",
                 symptom_onset_date="2019-03-02",
             )
+
+    def test_ibge_municipality_code_is_normalized_for_model_features(self):
+        patient = api.DadosPaciente(residence_municipality=3304557)
+
+        self.assertEqual(patient.residence_municipality, 330455)
+
+    def test_epidemiological_fields_are_derived_from_dates(self):
+        patient = api.DadosPaciente(
+            notification_date="2021-01-03",
+            symptom_onset_date="2020-12-31",
+        )
+
+        self.assertEqual(patient.notification_epi_week, 1)
+        self.assertEqual(patient.notification_year, 2021)
+        self.assertEqual(patient.symptom_epi_week_number, 53)
+        self.assertEqual(patient.symptom_epi_year, 2020)
 
     def test_simulation_pool_contains_only_test_cases_and_valid_classes(self):
         try:
@@ -204,6 +229,8 @@ class ApiTestCase(unittest.TestCase):
             {"age", "sex", "race", "occupation", "state", "municipality", "symptoms"},
         )
         self.assertIsInstance(case["symptoms"], list)
+        if case["municipality"] is not None:
+            self.assertFalse(case["municipality"].isdigit())
 
         model_names = {item["name"] for item in result["prediction"]["models"]}
         self.assertEqual(model_names, required_models)
@@ -235,6 +262,7 @@ class ApiTestCase(unittest.TestCase):
         self.assertIn("sintomas", result)
         self.assertIn("ufs", result)
         self.assertIn("modelosAtivos", result)
+        self.assertIn("limiarClassificacao", result)
         self.assertIn("liamiarClassificacao", result)
         self.assertIn("pesosModelos", result)
 
@@ -262,6 +290,9 @@ class ApiTestCase(unittest.TestCase):
             FEATURE_SCHEMA_VERSION,
         )
         self.assertIn("artefatos_compativeis", result)
+        self.assertTrue(result["lookups_contexto_compativeis"])
+        self.assertGreater(result["lookups_contexto"]["local_density"], 0)
+        self.assertGreater(result["lookups_contexto"]["local_positivity"], 0)
         self.assertIn("periodos", result)
         self.assertNotIn("preprocess_carregado", result)
 
@@ -338,10 +369,11 @@ class ApiTestCase(unittest.TestCase):
         if not api._REGIOES_REF:
             self.skipTest("data/regioes_saude.json não encontrado")
 
-        # Rio de Janeiro (3304557) deve ter ao menos uma região
-        result = api.buscar_regioes_saude(municipality=3304557)
+        municipality = next(iter(api._REGIOES_REF))
+        result = api.buscar_regioes_saude(municipality=municipality)
         self.assertIn("items", result)
         self.assertIsInstance(result["items"], list)
+        self.assertGreater(len(result["items"]), 0)
 
         for item in result["items"]:
             self.assertIn("code", item)
@@ -350,6 +382,21 @@ class ApiTestCase(unittest.TestCase):
     def test_health_regions_unknown_municipality_returns_empty(self):
         result = api.buscar_regioes_saude(municipality=9999999)
         self.assertEqual(result["items"], [])
+
+    def test_predict_requires_the_complete_ensemble(self):
+        original = api.modelos
+        try:
+            api.modelos = {
+                name: model
+                for name, model in original.items()
+                if name != "lightgbm"
+            }
+            with self.assertRaises(HTTPException) as context:
+                api.predict(self.patient)
+        finally:
+            api.modelos = original
+
+        self.assertEqual(context.exception.status_code, 503)
 
 
 if __name__ == "__main__":

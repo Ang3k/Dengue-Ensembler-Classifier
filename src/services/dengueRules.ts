@@ -43,7 +43,7 @@ export type RandomSimulationResponse = {
   prediction: EvaluationResult;
 };
 
-const API_URL = (
+export const API_URL = (
   import.meta.env.VITE_API_URL ?? "http://localhost:8000"
 ).replace(/\/+$/, "");
 
@@ -145,6 +145,15 @@ function mensagemErroApi(errorBody: unknown, status: number): string {
 
   const detail = (errorBody as { detail?: unknown }).detail;
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    const message = (detail as { message?: unknown }).message;
+    const missing = (detail as { missing?: unknown }).missing;
+    if (typeof message === "string") {
+      return Array.isArray(missing) && missing.length > 0
+        ? `${message}: ${missing.join(", ")}.`
+        : message;
+    }
+  }
   if (!Array.isArray(detail)) return `A API retornou o status ${status}.`;
 
   const messages = detail.flatMap(issue => {

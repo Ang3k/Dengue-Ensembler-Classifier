@@ -3,6 +3,7 @@ from pathlib import Path
 import unittest
 import zipfile
 
+import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
@@ -16,6 +17,8 @@ from dengue_pipeline.features import (
     DATASET_METADATA_COLUMNS,
     MODEL_FEATURE_COLUMNS,
     SYMPTOM_COLUMNS,
+    build_local_density_lookup,
+    compute_local_positivity,
 )
 from dengue_pipeline.paths import (
     DENGUE_YEARS,
@@ -95,6 +98,43 @@ class ClassificationMappingTestCase(unittest.TestCase):
 
 
 class FeatureSchemaTestCase(unittest.TestCase):
+    def test_legacy_local_positivity_uses_harmonized_target(self):
+        frame = pd.DataFrame(
+            {
+                "notification_year": [2014, 2014],
+                "residence_municipality": [330455, 330455],
+                "notification_epi_week": [201401, 201402],
+                "final_classification_code": [1, 5],
+                "final_classification": [1, 0],
+            }
+        )
+
+        positivity = compute_local_positivity(frame)
+
+        self.assertTrue(pd.isna(positivity.iloc[0]))
+        self.assertEqual(positivity.iloc[1], 1.0)
+
+    def test_serving_lookup_averages_years_without_case_weighting(self):
+        frame = pd.DataFrame(
+            {
+                "notification_year": [2017] * 11 + [2018] * 10,
+                "residence_municipality": [330455] * 21,
+                "notification_epi_week": (
+                    [201701] + [201702] * 10
+                    + [201801] * 9 + [201802]
+                ),
+            }
+        )
+
+        lookup = build_local_density_lookup(frame)
+        received = lookup.loc[
+            lookup["epi_week_of_year"].eq(2),
+            "local_density",
+        ].item()
+        expected = (np.log1p(1) + np.log1p(9)) / 2
+
+        self.assertAlmostEqual(received, expected, places=6)
+
     def test_years_and_chunks_produce_the_same_schema(self):
         schemas = []
         for year in (2014, 2019, 2020, 2021):

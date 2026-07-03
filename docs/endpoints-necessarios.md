@@ -1,10 +1,10 @@
-# Endpoints necessários para completar o site
+# Contrato dos endpoints do site
 
 ## Objetivo
 
-Completar a simulação da página inicial com um caso histórico real e melhorar a
-triagem para que o usuário pesquise informações por nome, sem precisar digitar
-códigos técnicos.
+Documentar a simulação da página inicial e as referências usadas pela triagem
+para que o usuário pesquise informações por nome, sem precisar digitar códigos
+técnicos.
 
 O Panorama Epidemiológico continuará utilizando gráficos estáticos e não
 precisa de novos endpoints.
@@ -21,9 +21,9 @@ precisa de novos endpoints.
 | `GET` | `/api/v1/references/municipalities` | Implementado | Pesquisa municípios por nome |
 | `GET` | `/api/v1/references/health-regions` | Implementado | Retorna a região de saúde de um município |
 
-## Divisão entre duas pessoas
+## Funcionalidades implementadas
 
-### Pessoa 1 — Simulação da página inicial
+### Simulação da página inicial
 
 Endpoint:
 
@@ -40,13 +40,7 @@ Responsabilidades:
 - alterar o simulador da Home;
 - criar os testes da simulação.
 
-Branch sugerida:
-
-```text
-feature/real-simulation
-```
-
-### Pessoa 2 — Formulário inteligente da triagem
+### Formulário inteligente da triagem
 
 Endpoints:
 
@@ -66,16 +60,6 @@ Responsabilidades:
 - calcular semana epidemiológica e dias até a notificação;
 - alterar o formulário da Triagem;
 - criar os testes dos endpoints e autocompletes.
-
-Branch sugerida:
-
-```text
-feature/triage-autocomplete
-```
-
-Cada pessoa deve trabalhar em um router e nos componentes da sua própria
-funcionalidade. Assim, as duas tarefas ficam independentes e o possível conflito
-fica limitado ao registro dos routers na aplicação principal.
 
 ## 1. Simulação com um caso histórico real
 
@@ -97,7 +81,7 @@ O backend deve:
 2. remover identificadores e campos desnecessários;
 3. executar `build_model_features()`, a mesma função sem estado usada no treinamento;
 4. executar MLP, XGBoost e LightGBM;
-5. retornar os dados gerais, a classificação observada e as probabilidades.
+5. retornar os dados gerais, a classificação observada e os scores.
 
 Uma `seed` poderá ser enviada para reproduzir uma simulação:
 
@@ -249,7 +233,7 @@ guardará os códigos.
 ### Endpoint
 
 ```http
-GET /api/v1/references/health-regions?municipality=3304557
+GET /api/v1/references/health-regions?municipality=2903201
 ```
 
 Resposta sugerida:
@@ -258,17 +242,19 @@ Resposta sugerida:
 {
   "items": [
     {
-      "code": 33005,
-      "name": "Metropolitana I",
-      "state": "RJ"
+      "code": 1403,
+      "name": "BARREIRAS",
+      "state": "BA",
+      "officialCode": 29002
     }
   ]
 }
 ```
 
-Após a seleção do município, o frontend deve preencher a região de saúde
-automaticamente. Caso exista mais de uma opção válida, o usuário deverá
-selecionar pelo nome.
+Após a seleção do município, o frontend preenche a região de saúde
+automaticamente. O nome vem do OpenDataSUS; o campo `code` usa o identificador
+interno observado no período de treino, que é o valor compatível com os
+artefatos dos modelos.
 
 ## Campos calculados automaticamente
 
