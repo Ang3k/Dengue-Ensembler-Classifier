@@ -6,9 +6,9 @@
   "test_period": [
     2021
   ],
-  "threshold_rule": "max_balanced_accuracy",
+  "threshold_rule": "manual_operating_point",
   "weight_rule": "normalized_validation_recall",
-  "threshold": 0.57,
+  "threshold": 0.3,
   "weights": {
     "mlp": 0.3315448553479668,
     "xgboost": 0.3343269117738769,

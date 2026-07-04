@@ -75,7 +75,7 @@ function PredictionSimulator() {
       <p>
         Gere um caso histórico real do conjunto de teste e veja a predição dos
         modelos treinados. O backend seleciona o caso, aplica o mesmo
-        pré-processamento do treino e retorna o resultado completo.
+        pré-processamento do treino e retorna o resultado.
       </p>
 
       {erro && <p style={{ color: "#dc2626", fontWeight: 600 }}>{erro}</p>}

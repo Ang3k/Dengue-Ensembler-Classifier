@@ -10,7 +10,28 @@
 
   --superficie: #ffffff;
   --superficie-suave: #f8fafc;
+  --superficie-hover: #ecfeff;
   --borda: #e2e8f0;
+  --borda-forte: #cbd5e1;
+  --navbar-fundo: rgba(255, 255, 255, 0.85);
+  --fundo-app: linear-gradient(135deg, #e0f2fe, #f0fdf4);
+
+  --diagrama-destaque: #0f766e;
+  --diagrama-superficie: #ffffff;
+  --diagrama-superficie-suave: #f1f5f9;
+  --diagrama-texto: #1f2937;
+  --diagrama-texto-inverso: #ffffff;
+  --diagrama-linha: #64748b;
+  --diagrama-linha-suave: #94a3b8;
+  --diagrama-producao: #b45309;
+
+  /* Aliases usados pelos componentes de autocomplete */
+  --surface: var(--superficie);
+  --surface-hover: var(--superficie-hover);
+  --surface-muted: #f5f5f5;
+  --border: var(--borda);
+  --text-secondary: var(--cor-texto-suave);
+  --text-muted: var(--cor-texto-leve);
 
   /* Cantos e sombras consistentes */
   --raio-card: 24px;
@@ -26,8 +47,9 @@
 body {
   margin: 0;
   font-family: "Inter", system-ui, "Segoe UI", Arial, Helvetica, sans-serif;
-  background: linear-gradient(135deg, #e0f2fe, #f0fdf4);
+  background: var(--fundo-app);
   color: var(--cor-texto);
+  transition: color 0.25s ease, background-color 0.25s ease;
 }
 
 /* Acabamento: estados de foco acessíveis e consistentes */
@@ -50,10 +72,11 @@ select:focus-visible {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--navbar-fundo);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--borda);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
 .navbar-inner {
@@ -177,6 +200,83 @@ h1 {
   font-size: 15px !important;
   line-height: 1.6;
   text-align: left !important;
+}
+
+.home-resultados {
+  margin-top: 36px;
+  text-align: left;
+}
+
+.home-resultados h2 {
+  text-align: left;
+}
+
+.metricas-contexto {
+  margin-bottom: 18px !important;
+  text-align: left;
+}
+
+.metricas-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.metrica-card {
+  min-width: 0;
+  padding: 18px;
+  text-align: left;
+  background: var(--superficie-suave);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-elemento);
+  box-shadow: var(--sombra-suave);
+}
+
+.metrica-valor {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--cor-primaria);
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -0.8px;
+}
+
+.metrica-nome {
+  display: block;
+  color: var(--cor-texto);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.metrica-card p {
+  margin: 10px 0 0;
+  color: var(--cor-texto-suave);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.metricas-nota {
+  margin-top: 18px !important;
+  padding: 14px 16px;
+  background: var(--superficie-suave);
+  border-left: 4px solid var(--cor-acento);
+  border-radius: 0 10px 10px 0;
+  color: var(--cor-texto-suave) !important;
+  font-size: 13px !important;
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .metricas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .metricas-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sim-card {
@@ -1029,4 +1129,285 @@ h1 {
   margin: 6px 0 0;
   color: var(--cor-texto-suave);
   line-height: 1.6;
+}
+
+/* ===== Alternância de tema ===== */
+.theme-toggle {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 1000;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--cor-primaria);
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--cor-primaria-escura);
+  background: var(--superficie-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.24);
+}
+
+.theme-toggle svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ===== Tema escuro ===== */
+:root[data-theme="dark"] {
+  --cor-primaria: #62cfc2;
+  --cor-primaria-escura: #83ddd3;
+  --cor-acento: #35b8aa;
+
+  --cor-texto: #e3e7ec;
+  --cor-texto-suave: #b0bac6;
+  --cor-texto-leve: #84909e;
+
+  --superficie: #151a21;
+  --superficie-suave: #1b212a;
+  --superficie-hover: #222c33;
+  --borda: #303842;
+  --borda-forte: #424c58;
+  --navbar-fundo: rgba(11, 15, 20, 0.9);
+  --fundo-app:
+    radial-gradient(circle at 8% 0%, rgba(53, 184, 170, 0.08), transparent 32%),
+    #0b0f14;
+  --surface-muted: #202731;
+
+  --sombra-card: 0 20px 50px rgba(0, 0, 0, 0.32);
+  --sombra-suave: 0 8px 18px rgba(0, 0, 0, 0.2);
+
+  --diagrama-destaque: #18877d;
+  --diagrama-superficie: #1b212a;
+  --diagrama-superficie-suave: #202731;
+  --diagrama-texto: #dfe5eb;
+  --diagrama-texto-inverso: #ffffff;
+  --diagrama-linha: #8d9aa8;
+  --diagrama-linha-suave: #4b5663;
+  --diagrama-producao: #d9a441;
+}
+
+:root[data-theme="dark"] .navbar {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="dark"] .navbar-link {
+  color: var(--cor-texto-suave);
+}
+
+:root[data-theme="dark"] .navbar-link:hover {
+  background: rgba(53, 184, 170, 0.1);
+  color: var(--cor-primaria);
+}
+
+:root[data-theme="dark"] .navbar-link.active,
+:root[data-theme="dark"] .btn-primary {
+  background: #177e76;
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .navbar-link.active {
+  box-shadow: 0 8px 18px rgba(23, 126, 118, 0.22);
+}
+
+:root[data-theme="dark"] .btn-primary:hover {
+  background: #12675f;
+}
+
+:root[data-theme="dark"] .card {
+  border-color: var(--borda);
+}
+
+:root[data-theme="dark"] .card > p,
+:root[data-theme="dark"] .home-section p,
+:root[data-theme="dark"] .home-aviso,
+:root[data-theme="dark"] .sim-media-apoio,
+:root[data-theme="dark"] .insight-card p,
+:root[data-theme="dark"] .avaliacao-card p,
+:root[data-theme="dark"] .orientacao-final p {
+  color: var(--cor-texto-suave) !important;
+}
+
+:root[data-theme="dark"] .home-section h2,
+:root[data-theme="dark"] .grupo-sintomas h2,
+:root[data-theme="dark"] .patient-form h2 {
+  border-color: rgba(53, 184, 170, 0.25);
+}
+
+:root[data-theme="dark"] .home-aviso,
+:root[data-theme="dark"] .sim-card,
+:root[data-theme="dark"] .resultado-triagem,
+:root[data-theme="dark"] .insight-card,
+:root[data-theme="dark"] .checkbox-item,
+:root[data-theme="dark"] .patient-form,
+:root[data-theme="dark"] .orientacao-final {
+  background: var(--superficie-suave);
+  border-color: var(--borda);
+}
+
+:root[data-theme="dark"] .sim-label,
+:root[data-theme="dark"] .modelo-quadrado-legenda,
+:root[data-theme="dark"] .analise-figura figcaption,
+:root[data-theme="dark"] .resultado small,
+:root[data-theme="dark"] .form-hint {
+  color: var(--cor-texto-leve);
+}
+
+:root[data-theme="dark"] .sim-valor,
+:root[data-theme="dark"] .modelo-quadrado-nome,
+:root[data-theme="dark"] .sim-modelo-nome,
+:root[data-theme="dark"] .avaliacao-card h3 {
+  color: var(--cor-texto);
+}
+
+:root[data-theme="dark"] .sim-tag {
+  color: var(--cor-primaria);
+  background: rgba(53, 184, 170, 0.09);
+  border-color: rgba(98, 207, 194, 0.3);
+}
+
+:root[data-theme="dark"] .sim-classificacao,
+:root[data-theme="dark"] .predicao-media,
+:root[data-theme="dark"] .sim-predicao,
+:root[data-theme="dark"] .sim-media,
+:root[data-theme="dark"] .analise {
+  border-color: var(--borda);
+}
+
+:root[data-theme="dark"] .modelo-quadrado,
+:root[data-theme="dark"] .analise-figura,
+:root[data-theme="dark"] .avaliacao-card,
+:root[data-theme="dark"] .pipeline-etapa {
+  background: #1d242d;
+  border-color: var(--borda);
+  box-shadow: var(--sombra-suave);
+}
+
+:root[data-theme="dark"] .modelo-quadrado-peso,
+:root[data-theme="dark"] .sim-modelo-peso {
+  color: var(--cor-texto-suave);
+}
+
+:root[data-theme="dark"] .sim-barra {
+  background: #303a46;
+}
+
+:root[data-theme="dark"] .sim-veredito-dengue,
+:root[data-theme="dark"] .resultado-alta {
+  color: #ffb07c;
+  background: linear-gradient(
+    135deg,
+    rgba(154, 52, 18, 0.28),
+    rgba(124, 45, 18, 0.4)
+  );
+}
+
+:root[data-theme="dark"] .sim-veredito-nao,
+:root[data-theme="dark"] .resultado-baixa {
+  color: #79d99b;
+  background: linear-gradient(
+    135deg,
+    rgba(20, 83, 45, 0.34),
+    rgba(21, 128, 61, 0.2)
+  );
+}
+
+:root[data-theme="dark"] .resultado-moderada {
+  color: #e5c766;
+  background: linear-gradient(
+    135deg,
+    rgba(113, 63, 18, 0.36),
+    rgba(133, 77, 14, 0.24)
+  );
+}
+
+:root[data-theme="dark"] .resultado-baixa h2 {
+  color: #79d99b;
+}
+
+:root[data-theme="dark"] .resultado-moderada h2 {
+  color: #e5c766;
+}
+
+:root[data-theme="dark"] .resultado-alta h2 {
+  color: #ffb07c;
+}
+
+:root[data-theme="dark"] .checkbox-item:hover,
+:root[data-theme="dark"] .autocomplete-item:hover,
+:root[data-theme="dark"] .autocomplete-item.focused {
+  background: var(--superficie-hover);
+}
+
+:root[data-theme="dark"] .form-group label {
+  color: var(--cor-texto);
+}
+
+:root[data-theme="dark"] .form-group input,
+:root[data-theme="dark"] .form-group select {
+  color: var(--cor-texto);
+  background: #10151b;
+  border-color: var(--borda-forte);
+}
+
+:root[data-theme="dark"] .form-group input::placeholder {
+  color: #64748b;
+}
+
+:root[data-theme="dark"] .autocomplete-list {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+:root[data-theme="dark"] .avaliacao-status {
+  color: var(--cor-texto);
+  background: #272e38;
+}
+
+:root[data-theme="dark"] .pipeline-destaque {
+  background: linear-gradient(
+    135deg,
+    rgba(23, 126, 118, 0.2),
+    rgba(53, 184, 170, 0.08)
+  );
+}
+
+:root[data-theme="dark"] .pipeline-destaque strong {
+  color: var(--cor-primaria);
+}
+
+:root[data-theme="dark"] .theme-toggle {
+  color: #d9a441;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+}
+
+:root[data-theme="dark"] .theme-toggle:hover {
+  color: #ebc46f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  .navbar,
+  .theme-toggle {
+    transition: none;
+  }
 }

@@ -11,8 +11,14 @@ type BoxProps = {
 function Box({ x, y, w, h, l1, l2, variant = "step" }: BoxProps) {
   const cx = x + w / 2;
   const cy = y + h / 2;
-  const fill = variant === "highlight" ? "#0f766e" : "#ffffff";
-  const text = variant === "highlight" ? "#ffffff" : "#1f2937";
+  const fill =
+    variant === "highlight"
+      ? "var(--diagrama-destaque)"
+      : "var(--diagrama-superficie)";
+  const text =
+    variant === "highlight"
+      ? "var(--diagrama-texto-inverso)"
+      : "var(--diagrama-texto)";
   return (
     <g>
       <rect
@@ -22,7 +28,7 @@ function Box({ x, y, w, h, l1, l2, variant = "step" }: BoxProps) {
         height={h}
         rx={12}
         fill={fill}
-        stroke="#0f766e"
+        stroke="var(--diagrama-destaque)"
         strokeWidth={1.6}
       />
       <text
@@ -78,8 +84,18 @@ function Cylinder({
   const lid = `M${x} ${y + ry} a ${rx} ${ry} 0 0 0 ${w} 0`;
   return (
     <g>
-      <path d={body} fill="#f1f5f9" stroke="#64748b" strokeWidth={1.4} />
-      <path d={lid} fill="none" stroke="#64748b" strokeWidth={1.4} />
+      <path
+        d={body}
+        fill="var(--diagrama-superficie-suave)"
+        stroke="var(--diagrama-linha)"
+        strokeWidth={1.4}
+      />
+      <path
+        d={lid}
+        fill="none"
+        stroke="var(--diagrama-linha)"
+        strokeWidth={1.4}
+      />
       <text
         x={cx}
         y={l2 ? textCenter - 8 : textCenter}
@@ -87,7 +103,7 @@ function Cylinder({
         dominantBaseline="middle"
         fontSize={12.5}
         fontWeight={700}
-        fill="#334155"
+        fill="var(--diagrama-texto)"
       >
         {l1}
       </text>
@@ -99,7 +115,7 @@ function Cylinder({
           dominantBaseline="middle"
           fontSize={12.5}
           fontWeight={700}
-          fill="#334155"
+          fill="var(--diagrama-texto)"
         >
           {l2}
         </text>
@@ -129,9 +145,9 @@ const etapas = [
   },
   {
     num: "04",
-    titulo: "Treino (2017 a 2019)",
+    titulo: "Treino e otimização (2017 a 2019)",
     texto:
-      "Três modelos diferentes aprendem com os casos de 2017 a 2019 e depois são combinados numa resposta só. Os ajustes finos foram feitos olhando para 2020.",
+      "Três modelos diferentes aprendem com os casos de 2017 a 2019. Nesse processo, o Optuna testa combinações de hiperparâmetros e devolve os melhores ajustes para um novo treino. Depois, os modelos são combinados numa resposta só.",
   },
   {
     num: "05",
@@ -173,7 +189,11 @@ function Pipeline() {
         </p>
 
         <div className="pipeline-diagrama">
-          <svg viewBox="0 0 900 372" role="img" aria-label="Diagrama do pipeline">
+          <svg
+            viewBox="0 0 900 372"
+            role="img"
+            aria-label="Diagrama do pipeline, incluindo o ciclo de otimização entre o treino e o Optuna"
+          >
             <defs>
               <marker
                 id="seta"
@@ -184,7 +204,7 @@ function Pipeline() {
                 orient="auto"
                 markerUnits="strokeWidth"
               >
-                <path d="M0,0 L7,3 L0,6 Z" fill="#64748b" />
+                <path d="M0,0 L7,3 L0,6 Z" fill="var(--diagrama-linha)" />
               </marker>
             </defs>
 
@@ -194,38 +214,64 @@ function Pipeline() {
               y1="262"
               x2="884"
               y2="262"
-              stroke="#94a3b8"
+              stroke="var(--diagrama-linha-suave)"
               strokeWidth="1.2"
               strokeDasharray="6 6"
             />
-            <text x="24" y="250" fontSize="11" fontWeight="700" fill="#0f766e">
+            <text
+              x="24"
+              y="250"
+              fontSize="11"
+              fontWeight="700"
+              fill="var(--diagrama-destaque)"
+            >
               experimentação e teste
             </text>
-            <text x="24" y="284" fontSize="11" fontWeight="700" fill="#b45309">
+            <text
+              x="24"
+              y="284"
+              fontSize="11"
+              fontWeight="700"
+              fill="var(--diagrama-producao)"
+            >
               produção e serving
             </text>
 
             {/* Container tracejado das etapas manuais */}
             <rect
               x="170"
-              y="124"
+              y="34"
               width="578"
-              height="112"
+              height="202"
               rx="14"
               fill="none"
-              stroke="#94a3b8"
+              stroke="var(--diagrama-linha-suave)"
               strokeWidth="1.2"
               strokeDasharray="6 6"
             />
-            <text x="186" y="145" fontSize="11.5" fontWeight="700" fill="#64748b">
+            <text
+              x="186"
+              y="56"
+              fontSize="11.5"
+              fontWeight="700"
+              fill="var(--diagrama-linha)"
+            >
               Etapas de experimentação (executadas manualmente)
             </text>
 
             {/* Setas: fluxo de experimentacao (esquerda para direita) */}
-            <g stroke="#64748b" strokeWidth="1.6" fill="none" markerEnd="url(#seta)">
+            <g
+              stroke="var(--diagrama-linha)"
+              strokeWidth="1.6"
+              fill="none"
+              markerEnd="url(#seta)"
+            >
               <path d="M86 74 L86 160" />
               <path d="M146 189 L190 189" />
               <path d="M340 189 L356 189" />
+              {/* Ciclo de otimização de hiperparâmetros */}
+              <path d="M404 160 L404 116" />
+              <path d="M468 116 L468 160" />
               <path d="M516 189 L532 189" />
               <path d="M728 189 L764 189" />
               {/* Modelo treinado desce para o registro */}
@@ -241,6 +287,7 @@ function Pipeline() {
             {/* Linha de experimentacao */}
             <Box x={26} y={160} w={120} h={58} l1="Extração e" l2="análise" />
             <Box x={190} y={160} w={150} h={58} l1="Preparação" l2="e features" />
+            <Box x={380} y={72} w={112} h={44} l1="Optuna" />
             <Box x={356} y={160} w={160} h={58} l1="Treino" l2="2017-2019" />
             <Box x={532} y={160} w={196} h={58} l1="Avaliação" l2="temporal 2021" />
             <Box x={764} y={160} w={110} h={58} l1="Modelo" l2="treinado" />

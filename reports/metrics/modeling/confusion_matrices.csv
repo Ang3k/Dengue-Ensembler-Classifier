@@ -11,7 +11,7 @@ lightgbm,0,0,409856
 lightgbm,0,1,74730
 lightgbm,1,0,171817
 lightgbm,1,1,283901
-ensemble,0,0,408889
-ensemble,0,1,75697
-ensemble,1,0,169754
-ensemble,1,1,285964
+ensemble,0,0,280345
+ensemble,0,1,204241
+ensemble,1,0,58072
+ensemble,1,1,397646

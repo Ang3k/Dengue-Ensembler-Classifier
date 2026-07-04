@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import Triage from "./pages/Triage";
 import Pipeline from "./pages/Pipeline";
 import Graphics from "./pages/Graphics";
+import ThemeToggle from "./components/ThemeToggle";
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="/pipeline" element={<Pipeline />} />
         <Route path="/graphics" element={<Graphics />} />
       </Routes>
+      <ThemeToggle />
     </BrowserRouter>
   );
 }

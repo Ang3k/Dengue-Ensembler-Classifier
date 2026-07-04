@@ -74,10 +74,10 @@ sensibilidade. Os limiares individuais maximizam balanced accuracy em 2020.
 
 | Modelo | Limiar | Precisão | Recall | Especificidade | F1 | ROC-AUC | PR-AUC |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| MLP | 0,54 | 0,784 | 0,619 | 0,840 | 0,692 | 0,820 | 0,809 |
-| XGBoost | 0,59 | 0,788 | 0,632 | 0,840 | 0,701 | 0,828 | 0,821 |
-| LightGBM | 0,60 | 0,793 | 0,618 | 0,848 | 0,695 | 0,828 | 0,820 |
-| Ensemble | 0,30 | 0,661 | 0,871 | 0,580 | 0,752 | 0,829 | 0,820 |
+| MLP | 0,53 | 0,788 | 0,613 | 0,845 | 0,689 | 0,820 | 0,809 |
+| XGBoost | 0,60 | 0,792 | 0,621 | 0,847 | 0,697 | 0,828 | 0,821 |
+| LightGBM | 0,60 | 0,792 | 0,623 | 0,846 | 0,697 | 0,828 | 0,821 |
+| Ensemble | 0,30 | 0,661 | 0,873 | 0,579 | 0,752 | 0,829 | 0,821 |
 
 O ensemble acertou 72,1% dos 940.304 registros de teste. As métricas completas,
 curvas e matrizes de confusão estão em `reports/metrics/modeling/` e
