@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from .diseases import get_disease_config
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -31,12 +33,73 @@ EXPECTED_SPLIT_ROWS = {
     "test": 940_304,
 }
 
-def analysis_dataset_path(year: int) -> Path:
-    return PROCESSED_ANALYSIS_DIR / f"dengue_analysis_{year}.parquet"
+
+def disease_years(disease: str = "dengue") -> tuple[int, ...]:
+    return get_disease_config(disease).years
 
 
-def ml_dataset_path(year: int) -> Path:
-    return PROCESSED_ML_DIR / f"dengue_ml_{year}.parquet"
+def temporal_split(disease: str = "dengue") -> tuple[
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+]:
+    config = get_disease_config(disease)
+    return (
+        config.train_years,
+        config.validation_years,
+        config.test_years,
+    )
+
+
+def expected_split_rows(disease: str = "dengue") -> dict[str, int]:
+    return get_disease_config(disease).expected_split_rows
+
+
+def analysis_dataset_path(
+    year: int,
+    disease: str = "dengue",
+) -> Path:
+    disease = get_disease_config(disease).name
+    return PROCESSED_ANALYSIS_DIR / f"{disease}_analysis_{year}.parquet"
+
+
+def ml_dataset_path(year: int, disease: str = "dengue") -> Path:
+    disease = get_disease_config(disease).name
+    return PROCESSED_ML_DIR / f"{disease}_ml_{year}.parquet"
+
+
+def disease_models_dir(disease: str = "dengue") -> Path:
+    disease = get_disease_config(disease).name
+    return MODELS_DIR if disease == "dengue" else MODELS_DIR / disease
+
+
+def disease_model_figures_dir(disease: str = "dengue") -> Path:
+    disease = get_disease_config(disease).name
+    return (
+        MODEL_FIGURES_DIR
+        if disease == "dengue"
+        else MODEL_FIGURES_DIR / disease
+    )
+
+
+def disease_model_manifest_path(disease: str = "dengue") -> Path:
+    return disease_models_dir(disease) / "model_manifest.json"
+
+
+def disease_ensemble_config_path(disease: str = "dengue") -> Path:
+    return disease_models_dir(disease) / "ensemble_config.json"
+
+
+def disease_local_density_lookup_path(
+    disease: str = "dengue",
+) -> Path:
+    return disease_models_dir(disease) / "local_density_lookup.parquet"
+
+
+def disease_local_positivity_lookup_path(
+    disease: str = "dengue",
+) -> Path:
+    return disease_models_dir(disease) / "local_positivity_lookup.parquet"
 
 
 SIMULATION_SOURCE_PARQUET = analysis_dataset_path(2021)

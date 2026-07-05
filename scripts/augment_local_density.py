@@ -15,6 +15,7 @@ chunk nem numa linha isolada. Este passo roda DEPOIS de
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import sys
 
@@ -29,12 +30,11 @@ from dengue_pipeline.features import (  # noqa: E402
     compute_local_density,
     compute_local_positivity,
 )
+from dengue_pipeline.diseases import get_disease_config  # noqa: E402
 from dengue_pipeline.paths import (  # noqa: E402
-    DENGUE_YEARS,
-    LOCAL_DENSITY_LOOKUP_PATH,
-    LOCAL_POSITIVITY_LOOKUP_PATH,
-    TRAIN_YEARS,
     analysis_dataset_path,
+    disease_local_density_lookup_path,
+    disease_local_positivity_lookup_path,
     ml_dataset_path,
 )
 
@@ -54,13 +54,28 @@ def _atomic_write(frame: pd.DataFrame, destination: Path) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--disease",
+        choices=("dengue", "chikungunya"),
+        default="dengue",
+    )
+    args = parser.parse_args()
+    config = get_disease_config(args.disease)
+    local_density_lookup_path = disease_local_density_lookup_path(
+        config.name
+    )
+    local_positivity_lookup_path = disease_local_positivity_lookup_path(
+        config.name
+    )
+
     lookup_frames = []
-    for year in DENGUE_YEARS:
-        analysis_path = analysis_dataset_path(year)
-        ml_path = ml_dataset_path(year)
+    for year in config.years:
+        analysis_path = analysis_dataset_path(year, config.name)
+        ml_path = ml_dataset_path(year, config.name)
         if not analysis_path.exists() or not ml_path.exists():
             raise FileNotFoundError(
-                f"[{year}] datasets ausentes; rode prepare_dengue_data.py antes."
+                f"[{year}] datasets de {config.name} ausentes"
             )
 
         analysis = pd.read_parquet(analysis_path, columns=_ANALYSIS_COLUMNS)
@@ -76,7 +91,7 @@ def main() -> None:
         ml["local_positivity"] = positivity.to_numpy()
         _atomic_write(ml, ml_path)
 
-        if year in TRAIN_YEARS:
+        if year in config.train_years:
             lookup_frames.append(analysis)
         print(
             f"[{year}] local_density + local_positivity gravadas em "
@@ -86,13 +101,13 @@ def main() -> None:
         )
 
     combined = pd.concat(lookup_frames, ignore_index=True)
-    LOCAL_DENSITY_LOOKUP_PATH.parent.mkdir(parents=True, exist_ok=True)
+    local_density_lookup_path.parent.mkdir(parents=True, exist_ok=True)
     density_lookup = build_local_density_lookup(combined)
     positivity_lookup = build_local_positivity_lookup(combined)
-    _atomic_write(density_lookup, LOCAL_DENSITY_LOOKUP_PATH)
-    _atomic_write(positivity_lookup, LOCAL_POSITIVITY_LOOKUP_PATH)
+    _atomic_write(density_lookup, local_density_lookup_path)
+    _atomic_write(positivity_lookup, local_positivity_lookup_path)
     print(
-        f"Lookups de serving de {TRAIN_YEARS} escritos: densidade "
+        f"Lookups de serving de {config.train_years} escritos: densidade "
         f"({len(density_lookup):,} pares) e positividade "
         f"({len(positivity_lookup):,} pares)"
     )

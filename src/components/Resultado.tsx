@@ -2,11 +2,13 @@ import { formatModelName } from "../services/dengueRules";
 import type { EvaluationResult } from "../services/dengueRules";
 
 function Resultado({
+  disease,
   models,
   average,
   threshold,
-  isDengue,
+  isPositive,
 }: EvaluationResult) {
+  const diseaseLabel = disease === "dengue" ? "dengue" : "chikungunya";
   return (
     <div className="resultado-triagem">
       <h2>Resultado da triagem</h2>
@@ -19,7 +21,9 @@ function Resultado({
               {formatModelName(modelo.name)}
             </span>
             <span className="modelo-quadrado-prob">{modelo.probability}%</span>
-            <span className="modelo-quadrado-legenda">score de dengue</span>
+            <span className="modelo-quadrado-legenda">
+              score de {diseaseLabel}
+            </span>
             <span className="modelo-quadrado-peso">
               Peso no ensemble: {modelo.weight}%
             </span>
@@ -34,12 +38,14 @@ function Resultado({
 
       <div
         className={`sim-veredito ${
-          isDengue ? "sim-veredito-dengue" : "sim-veredito-nao"
+          isPositive ? "sim-veredito-dengue" : "sim-veredito-nao"
         }`}
       >
-        {isDengue ? "É dengue" : "Não é dengue"}
+        {isPositive
+          ? `É ${diseaseLabel}`
+          : `Não é ${diseaseLabel}`}
         <small>
-          Score {isDengue ? "acima" : "abaixo"} do limiar de {threshold}%
+          Score {isPositive ? "acima" : "abaixo"} do limiar de {threshold}%
         </small>
       </div>
 

@@ -220,7 +220,16 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual(set(result), {"case", "observedClassification", "prediction"})
         self.assertEqual(
             set(result["prediction"]),
-            {"models", "average", "threshold", "weighting", "isDengue"},
+            {
+                "disease",
+                "models",
+                "average",
+                "threshold",
+                "weighting",
+                "isPositive",
+                "isDengue",
+                "isChikungunya",
+            },
         )
 
         case = result["case"]
@@ -256,6 +265,7 @@ class ApiTestCase(unittest.TestCase):
         result = api.triage_options()
 
         self.assertIn("sexos", result)
+        self.assertIn("doencas", result)
         self.assertIn("racas", result)
         self.assertIn("escolaridades", result)
         self.assertIn("situacoesGestacao", result)
@@ -278,6 +288,10 @@ class ApiTestCase(unittest.TestCase):
 
         # Todos os 27 estados
         self.assertEqual(len(result["ufs"]), 27)
+        self.assertEqual(
+            {item["code"] for item in result["doencas"]},
+            {"dengue", "chikungunya"},
+        )
 
         # Modelos ativos batem com os carregados
         self.assertEqual(set(result["modelosAtivos"]), set(api.modelos.keys()))

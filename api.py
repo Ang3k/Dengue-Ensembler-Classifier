@@ -1,5 +1,5 @@
 """
-API de predição de dengue.
+API de predição de dengue e chikungunya.
 
 Rode com:
     .venv\Scripts\python -m uvicorn api:app --reload
@@ -41,17 +41,15 @@ from dengue_pipeline.features import (
     compute_local_density,
     compute_local_positivity,
 )
+from dengue_pipeline.diseases import DISEASE_CONFIGS, get_disease_config
 from dengue_pipeline.paths import (
-    ENSEMBLE_CONFIG_PATH,
-    EXPECTED_SPLIT_ROWS,
-    LOCAL_DENSITY_LOOKUP_PATH,
-    LOCAL_POSITIVITY_LOOKUP_PATH,
-    MODEL_MANIFEST_PATH,
     SIMULATION_POOL_PATH,
     SIMULATION_SOURCE_PARQUET,
-    TEST_YEARS,
-    TRAIN_YEARS,
-    VALIDATION_YEARS,
+    disease_ensemble_config_path,
+    disease_local_density_lookup_path,
+    disease_local_positivity_lookup_path,
+    disease_model_manifest_path,
+    disease_models_dir,
 )
 from dengue_pipeline.sinan_mappings import (
     DENGUE_CLASSIFICATION_LABELS,
@@ -68,20 +66,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Carregar modelos e o pré-processamento salvos
 # ---------------------------------------------------------------------------
-
-MODELS_DIR = Path(__file__).parent / "artifacts" / "models"
-
 MODELOS_DISPONIVEIS = {
     "mlp":                 "mlp.joblib",
     "xgboost":             "xgboost.joblib",
     "lightgbm":            "lightgbm.joblib",
 }
-CONTEXT_LOOKUPS = {
-    "local_density": LOCAL_DENSITY_LOOKUP_PATH,
-    "local_positivity": LOCAL_POSITIVITY_LOOKUP_PATH,
-}
-
-
 def _load_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -101,110 +90,160 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-model_manifest = _load_json(MODEL_MANIFEST_PATH)
-ensemble_config = _load_json(ENSEMBLE_CONFIG_PATH)
-try:
-    ENSEMBLE_WEIGHTS = {
-        str(name): float(weight)
-        for name, weight in ensemble_config.get("weights", {}).items()
+def _load_model_bundle(disease: str) -> dict:
+    config = get_disease_config(disease)
+    models_dir = disease_models_dir(config.name)
+    manifest_path = disease_model_manifest_path(config.name)
+    ensemble_path = disease_ensemble_config_path(config.name)
+    context_paths = {
+        "local_density": disease_local_density_lookup_path(config.name),
+        "local_positivity": disease_local_positivity_lookup_path(config.name),
     }
-    ENSEMBLE_THRESHOLD = float(ensemble_config.get("threshold", 0.5))
-    ensemble_values_valid = (
-        set(ENSEMBLE_WEIGHTS) == set(MODELOS_DISPONIVEIS)
-        and all(
-            np.isfinite(weight) and weight > 0
-            for weight in ENSEMBLE_WEIGHTS.values()
-        )
-        and np.isfinite(ENSEMBLE_THRESHOLD)
-        and 0 <= ENSEMBLE_THRESHOLD <= 1
-    )
-except (AttributeError, TypeError, ValueError):
-    ENSEMBLE_WEIGHTS = {}
-    ENSEMBLE_THRESHOLD = 0.5
-    ensemble_values_valid = False
-
-model_manifest_compatible = (
-    model_manifest.get("feature_schema_version") == FEATURE_SCHEMA_VERSION
-    and model_manifest.get("feature_columns") == list(MODEL_FEATURE_COLUMNS)
-    and model_manifest.get("periods", {}).get("train") == list(TRAIN_YEARS)
-    and model_manifest.get("periods", {}).get("validation")
-    == list(VALIDATION_YEARS)
-    and model_manifest.get("periods", {}).get("test") == list(TEST_YEARS)
-    and model_manifest.get("row_counts") == EXPECTED_SPLIT_ROWS
-)
-context_lookups_compatible = all(
-    path.exists()
-    and model_manifest.get("context_lookups", {}).get(name, {}).get("file")
-    == path.name
-    and model_manifest.get("context_lookups", {}).get(name, {}).get("sha256")
-    == _sha256_file(path)
-    for name, path in CONTEXT_LOOKUPS.items()
-)
-ensemble_config_compatible = (
-    ensemble_config.get("feature_schema_version") == FEATURE_SCHEMA_VERSION
-    and ensemble_config.get("selection_period") == list(VALIDATION_YEARS)
-    and ensemble_config.get("test_period") == list(TEST_YEARS)
-    and set(ensemble_config.get("weights", {})) == set(MODELOS_DISPONIVEIS)
-    and ensemble_values_valid
-    and MODEL_MANIFEST_PATH.exists()
-    and ensemble_config.get("model_manifest_sha256")
-    == _sha256_file(MODEL_MANIFEST_PATH)
-)
-artifact_set_compatible = (
-    model_manifest_compatible
-    and context_lookups_compatible
-    and ensemble_config_compatible
-)
-
-modelos = {}
-erros_carregamento = {}
-for nome, arquivo in MODELOS_DISPONIVEIS.items():
-    caminho = MODELS_DIR / arquivo
-    if not artifact_set_compatible:
-        erros_carregamento[nome] = (
-            "manifesto ausente ou incompatível com o esquema de features "
-            f"{FEATURE_SCHEMA_VERSION}"
-        )
-        continue
-    if not caminho.exists():
-        erros_carregamento[nome] = f"arquivo não encontrado: {caminho}"
-        logger.warning("Modelo %s não encontrado em %s", nome, caminho)
-        continue
-
+    manifest = _load_json(manifest_path)
+    ensemble = _load_json(ensemble_path)
     try:
-        model_entry = model_manifest.get("models", {}).get(nome, {})
-        if model_entry.get("file") != arquivo:
-            raise ValueError("arquivo difere do manifesto do modelo")
-        if model_entry.get("sha256") != _sha256_file(caminho):
-            raise ValueError("SHA-256 difere do manifesto do modelo")
-        modelo = joblib.load(caminho)
-        if nome == "xgboost":
-            modelo_interno = getattr(modelo, "model", None)
-            if hasattr(modelo_interno, "set_params"):
-                modelo_interno.set_params(
-                    device=os.getenv("XGBOOST_DEVICE", "cpu")
-                )
-        elif nome == "mlp" and hasattr(modelo, "device"):
-            modelo.device = os.getenv("MLP_DEVICE", "auto")
-        feature_names = list(
-            getattr(modelo, "feature_names", None)
-            or getattr(modelo, "feature_names_in_", [])
-        )
-        if feature_names != list(MODEL_FEATURE_COLUMNS):
-            raise ValueError(
-                "features do modelo diferem de MODEL_FEATURE_COLUMNS"
+        weights = {
+            str(name): float(weight)
+            for name, weight in ensemble.get("weights", {}).items()
+        }
+        threshold = float(ensemble.get("threshold", 0.5))
+        ensemble_values_valid = (
+            set(weights) == set(MODELOS_DISPONIVEIS)
+            and all(
+                np.isfinite(weight) and weight > 0
+                for weight in weights.values()
             )
-        modelos[nome] = modelo
-        logger.info("Modelo %s carregado", nome)
-    except Exception as exc:
-        erros_carregamento[nome] = str(exc)
-        logger.exception("Não foi possível carregar o modelo %s", nome)
+            and np.isfinite(threshold)
+            and 0 <= threshold <= 1
+        )
+    except (AttributeError, TypeError, ValueError):
+        weights = {}
+        threshold = 0.5
+        ensemble_values_valid = False
+
+    manifest_compatible = (
+        manifest.get("disease", "dengue") == config.name
+        and manifest.get("feature_schema_version")
+        == FEATURE_SCHEMA_VERSION
+        and manifest.get("feature_columns") == list(MODEL_FEATURE_COLUMNS)
+        and manifest.get("periods", {}).get("train")
+        == list(config.train_years)
+        and manifest.get("periods", {}).get("validation")
+        == list(config.validation_years)
+        and manifest.get("periods", {}).get("test")
+        == list(config.test_years)
+        and manifest.get("row_counts") == config.expected_split_rows
+    )
+    lookups_compatible = all(
+        path.exists()
+        and manifest.get("context_lookups", {}).get(name, {}).get("file")
+        == path.name
+        and manifest.get("context_lookups", {}).get(name, {}).get("sha256")
+        == _sha256_file(path)
+        for name, path in context_paths.items()
+    )
+    ensemble_compatible = (
+        ensemble.get("disease", "dengue") == config.name
+        and ensemble.get("feature_schema_version") == FEATURE_SCHEMA_VERSION
+        and ensemble.get("selection_period")
+        == list(config.validation_years)
+        and ensemble.get("test_period") == list(config.test_years)
+        and set(ensemble.get("weights", {})) == set(MODELOS_DISPONIVEIS)
+        and ensemble_values_valid
+        and manifest_path.exists()
+        and ensemble.get("model_manifest_sha256")
+        == _sha256_file(manifest_path)
+    )
+    artifact_compatible = (
+        manifest_compatible
+        and lookups_compatible
+        and ensemble_compatible
+    )
+
+    loaded_models = {}
+    loading_errors = {}
+    for name, filename in MODELOS_DISPONIVEIS.items():
+        path = models_dir / filename
+        if not artifact_compatible:
+            loading_errors[name] = (
+                "manifesto ausente ou incompatível com o esquema de "
+                f"features {FEATURE_SCHEMA_VERSION}"
+            )
+            continue
+        if not path.exists():
+            loading_errors[name] = f"arquivo não encontrado: {path}"
+            continue
+        try:
+            entry = manifest.get("models", {}).get(name, {})
+            if entry.get("file") != filename:
+                raise ValueError("arquivo difere do manifesto do modelo")
+            if entry.get("sha256") != _sha256_file(path):
+                raise ValueError("SHA-256 difere do manifesto do modelo")
+            model = joblib.load(path)
+            if name == "xgboost":
+                internal_model = getattr(model, "model", None)
+                if hasattr(internal_model, "set_params"):
+                    internal_model.set_params(
+                        device=os.getenv("XGBOOST_DEVICE", "cpu")
+                    )
+            elif name == "mlp" and hasattr(model, "device"):
+                model.device = os.getenv("MLP_DEVICE", "auto")
+            feature_names = list(
+                getattr(model, "feature_names", None)
+                or getattr(model, "feature_names_in_", [])
+            )
+            if feature_names != list(MODEL_FEATURE_COLUMNS):
+                raise ValueError(
+                    "features do modelo diferem de MODEL_FEATURE_COLUMNS"
+                )
+            loaded_models[name] = model
+        except Exception as exc:
+            loading_errors[name] = str(exc)
+            logger.exception(
+                "Não foi possível carregar o modelo %s de %s",
+                name,
+                config.name,
+            )
+
+    return {
+        "config": config,
+        "manifest": manifest,
+        "ensemble": ensemble,
+        "weights": weights,
+        "threshold": threshold,
+        "models": loaded_models,
+        "loading_errors": loading_errors,
+        "context_paths": context_paths,
+        "manifest_compatible": manifest_compatible,
+        "lookups_compatible": lookups_compatible,
+        "ensemble_compatible": ensemble_compatible,
+        "artifact_compatible": artifact_compatible,
+    }
+
+
+MODEL_BUNDLES = {
+    disease: _load_model_bundle(disease)
+    for disease in DISEASE_CONFIGS
+}
+
+# Aliases mantidos para compatibilidade com o cliente e os testes de dengue.
+_dengue_bundle = MODEL_BUNDLES["dengue"]
+model_manifest = _dengue_bundle["manifest"]
+ensemble_config = _dengue_bundle["ensemble"]
+ENSEMBLE_WEIGHTS = _dengue_bundle["weights"]
+ENSEMBLE_THRESHOLD = _dengue_bundle["threshold"]
+model_manifest_compatible = _dengue_bundle["manifest_compatible"]
+context_lookups_compatible = _dengue_bundle["lookups_compatible"]
+ensemble_config_compatible = _dengue_bundle["ensemble_compatible"]
+artifact_set_compatible = _dengue_bundle["artifact_compatible"]
+modelos = _dengue_bundle["models"]
+erros_carregamento = _dengue_bundle["loading_errors"]
 
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="API Dengue", version="1.0.0")
+app = FastAPI(title="API Arboviroses", version="1.1.0")
 
 origens_cors = [
     origem.strip()
@@ -250,6 +289,8 @@ def _semana_epidemiologica(dia: date) -> int:
 
 class DadosPaciente(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    disease: Literal["dengue", "chikungunya"] = "dengue"
 
     # Paciente
     age_years: float | None = Field(default=None, ge=0, le=130)
@@ -469,14 +510,21 @@ def _carregar_lookup(path: Path, coluna: str) -> dict[tuple[int, int], float]:
         return {}
 
 
-LOCAL_DENSITY_LOOKUP = (
-    _carregar_lookup(LOCAL_DENSITY_LOOKUP_PATH, "local_density")
-    if context_lookups_compatible
-    else {}
-)
-LOCAL_POSITIVITY_LOOKUP = _carregar_lookup(
-    LOCAL_POSITIVITY_LOOKUP_PATH, "local_positivity"
-) if context_lookups_compatible else {}
+for _bundle in MODEL_BUNDLES.values():
+    _paths = _bundle["context_paths"]
+    _bundle["local_density_lookup"] = (
+        _carregar_lookup(_paths["local_density"], "local_density")
+        if _bundle["lookups_compatible"]
+        else {}
+    )
+    _bundle["local_positivity_lookup"] = (
+        _carregar_lookup(_paths["local_positivity"], "local_positivity")
+        if _bundle["lookups_compatible"]
+        else {}
+    )
+
+LOCAL_DENSITY_LOOKUP = _dengue_bundle["local_density_lookup"]
+LOCAL_POSITIVITY_LOOKUP = _dengue_bundle["local_positivity_lookup"]
 
 
 def _consultar_local(
@@ -501,12 +549,19 @@ def construir_features(
     simulação, com o valor exato de 2021), usa-os; senão consulta o lookup
     (paciente novo do /predict).
     """
+    bundle = MODEL_BUNDLES[dados.disease]
     if local_density is None:
-        local_density = _consultar_local(dados, LOCAL_DENSITY_LOOKUP)
+        local_density = _consultar_local(
+            dados,
+            bundle["local_density_lookup"],
+        )
     if local_positivity is None:
-        local_positivity = _consultar_local(dados, LOCAL_POSITIVITY_LOOKUP)
+        local_positivity = _consultar_local(
+            dados,
+            bundle["local_positivity_lookup"],
+        )
     return build_model_features(
-        pd.DataFrame([dados.model_dump()]),
+        pd.DataFrame([dados.model_dump(exclude={"disease"})]),
         local_density=local_density,
         local_positivity=local_positivity,
     )
@@ -532,14 +587,30 @@ def alinhar_colunas(df: pd.DataFrame, modelo):
     return df[esperadas].astype("float32"), []
 
 
-def _inferir_modelos(df: pd.DataFrame):
+def _inferir_modelos(
+    df: pd.DataFrame,
+    disease: str = "dengue",
+):
     """Executa a inferência em todos os modelos carregados para um vetor de
     features já construído."""
+    disease = get_disease_config(disease).name
+    bundle = MODEL_BUNDLES[disease]
+    active_models = modelos if disease == "dengue" else bundle["models"]
+    weights = (
+        ENSEMBLE_WEIGHTS
+        if disease == "dengue"
+        else bundle["weights"]
+    )
+    threshold = (
+        ENSEMBLE_THRESHOLD
+        if disease == "dengue"
+        else bundle["threshold"]
+    )
     resultados = []
     ignorados = []
     probabilidades = {}
 
-    for nome, modelo in modelos.items():
+    for nome, modelo in active_models.items():
         df_alinhado, faltantes = alinhar_colunas(df.copy(), modelo)
         if df_alinhado is None:
             ignorados.append(
@@ -587,9 +658,9 @@ def _inferir_modelos(df: pd.DataFrame):
         )
 
     pesos_disponiveis = {
-        name: ENSEMBLE_WEIGHTS[name]
+        name: weights[name]
         for name in probabilidades
-        if name in ENSEMBLE_WEIGHTS
+        if name in weights
     }
     if set(pesos_disponiveis) != set(probabilidades):
         raise HTTPException(
@@ -615,24 +686,38 @@ def _inferir_modelos(df: pd.DataFrame):
         )
     )
     score_percentual = round(score_ponderado * 100, 1)
-    threshold_percentual = round(float(ENSEMBLE_THRESHOLD) * 100, 1)
+    threshold_percentual = round(float(threshold) * 100, 1)
+    is_positive = score_ponderado >= float(threshold)
     return {
+        "disease": disease,
         "models": resultados,
         "average": score_percentual,
         "threshold": threshold_percentual,
         "weighting": "recall",
-        "isDengue": score_ponderado >= float(ENSEMBLE_THRESHOLD),
+        "isPositive": is_positive,
+        "isDengue": disease == "dengue" and is_positive,
+        "isChikungunya": disease == "chikungunya" and is_positive,
         "ignored": ignorados,
     }
 
 
-def _exigir_conjunto_completo_de_modelos() -> None:
-    ausentes = [nome for nome in MODELOS_DISPONIVEIS if nome not in modelos]
+def _exigir_conjunto_completo_de_modelos(
+    disease: str = "dengue",
+) -> None:
+    disease = get_disease_config(disease).name
+    bundle = MODEL_BUNDLES[disease]
+    active_models = modelos if disease == "dengue" else bundle["models"]
+    ausentes = [
+        nome for nome in MODELOS_DISPONIVEIS if nome not in active_models
+    ]
     if ausentes:
         raise HTTPException(
             status_code=503,
             detail={
-                "message": "Nem todos os modelos necessários foram carregados",
+                "message": (
+                    "Nem todos os modelos necessários foram carregados "
+                    f"para {disease}"
+                ),
                 "missing": ausentes,
             },
         )
@@ -956,6 +1041,28 @@ def health():
         set(ENSEMBLE_WEIGHTS) == set(MODELOS_DISPONIVEIS)
         and 0 <= ENSEMBLE_THRESHOLD <= 1
     )
+    diseases = {}
+    for disease, bundle in MODEL_BUNDLES.items():
+        active_models = (
+            modelos if disease == "dengue" else bundle["models"]
+        )
+        missing = [
+            name
+            for name in MODELOS_DISPONIVEIS
+            if name not in active_models
+        ]
+        diseases[disease] = {
+            "status": (
+                "ok"
+                if not missing and bundle["artifact_compatible"]
+                else "degraded"
+            ),
+            "modelos_carregados": list(active_models),
+            "modelos_ausentes": missing,
+            "erros_carregamento": bundle["loading_errors"],
+            "artefatos_compativeis": bundle["artifact_compatible"],
+            "periodos": bundle["manifest"].get("periods", {}),
+        }
     return {
         "status": (
             "ok"
@@ -975,20 +1082,21 @@ def health():
         "periodos": model_manifest.get("periods", {}),
         "ensemble_threshold": ENSEMBLE_THRESHOLD,
         "ensemble_weights": ENSEMBLE_WEIGHTS,
+        "doencas": diseases,
     }
 
 
 @app.post("/predict")
 def predict(dados: DadosPaciente):
-    _exigir_conjunto_completo_de_modelos()
+    _exigir_conjunto_completo_de_modelos(dados.disease)
     df = construir_features(dados)
 
-    return _inferir_modelos(df)
+    return _inferir_modelos(df, dados.disease)
 
 
 @app.post("/api/v1/simulations/random")
 def simulation_random(payload: SimulacaoRandomRequest | None = None):
-    _exigir_conjunto_completo_de_modelos()
+    _exigir_conjunto_completo_de_modelos("dengue")
 
     sample = escolher_caso_real_simulacao(seed=(payload.seed if payload else None))
     # Caso histórico: usa a densidade/positividade EXATAS de 2021 (as que o modelo
@@ -998,7 +1106,7 @@ def simulation_random(payload: SimulacaoRandomRequest | None = None):
         local_density=[float(sample["local_density"])],
         local_positivity=[float(sample["local_positivity"])],
     )
-    prediction = _inferir_modelos(features)
+    prediction = _inferir_modelos(features, "dengue")
 
     if prediction["ignored"]:
         raise HTTPException(
@@ -1013,11 +1121,14 @@ def simulation_random(payload: SimulacaoRandomRequest | None = None):
         "case": sample["case"],
         "observedClassification": sample["observed_classification"],
         "prediction": {
+            "disease": prediction["disease"],
             "models": prediction["models"],
             "average": prediction["average"],
             "threshold": prediction["threshold"],
             "weighting": prediction["weighting"],
+            "isPositive": prediction["isPositive"],
             "isDengue": prediction["isDengue"],
+            "isChikungunya": prediction["isChikungunya"],
         },
     }
 
@@ -1092,6 +1203,10 @@ def triage_options():
         for code, sigla in UF_ABBR_LABELS.items()
     ]
     return {
+        "doencas": [
+            {"code": "dengue", "name": "Dengue"},
+            {"code": "chikungunya", "name": "Chikungunya"},
+        ],
         "sexos": [
             {"code": k, "name": v} for k, v in SEX_LABELS.items()
         ],
@@ -1120,6 +1235,16 @@ def triage_options():
         ],
         "ufs": ufs,
         "modelosAtivos": list(modelos.keys()),
+        "modelosPorDoenca": {
+            disease: list(
+                (
+                    modelos
+                    if disease == "dengue"
+                    else bundle["models"]
+                ).keys()
+            )
+            for disease, bundle in MODEL_BUNDLES.items()
+        },
         "limiarClassificacao": DENGUE_THRESHOLD,
         # Compatibilidade temporária com clientes que consumiam a chave grafada
         # incorretamente antes da versão 1.0.

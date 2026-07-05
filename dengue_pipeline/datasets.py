@@ -13,17 +13,21 @@ from .paths import (
     TRAIN_YEARS,
     VALIDATION_YEARS,
     ml_dataset_path,
+    temporal_split,
 )
 
 
-def load_ml_years(years: Iterable[int]) -> pd.DataFrame:
+def load_ml_years(
+    years: Iterable[int],
+    disease: str = "dengue",
+) -> pd.DataFrame:
     frames = []
     for year in years:
-        path = ml_dataset_path(int(year))
+        path = ml_dataset_path(int(year), disease)
         if not path.exists():
             raise FileNotFoundError(
                 f"Processed dataset not found for {year}: {path}. "
-                "Run scripts/prepare_dengue_data.py first."
+                "Run the corresponding data preparation script first."
             )
         frames.append(pd.read_parquet(path))
     if not frames:
@@ -46,11 +50,19 @@ def split_features_target(
     return features, target
 
 
-def load_temporal_splits() -> dict[str, pd.DataFrame]:
+def load_temporal_splits(
+    disease: str = "dengue",
+) -> dict[str, pd.DataFrame]:
+    if disease == "dengue":
+        train_years = TRAIN_YEARS
+        validation_years = VALIDATION_YEARS
+        test_years = TEST_YEARS
+    else:
+        train_years, validation_years, test_years = temporal_split(disease)
     return {
-        "train": load_ml_years(TRAIN_YEARS),
-        "validation": load_ml_years(VALIDATION_YEARS),
-        "test": load_ml_years(TEST_YEARS),
+        "train": load_ml_years(train_years, disease),
+        "validation": load_ml_years(validation_years, disease),
+        "test": load_ml_years(test_years, disease),
     }
 
 

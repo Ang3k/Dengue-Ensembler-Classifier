@@ -1,0 +1,159 @@
+{
+  "dataset": "SINAN/Febre de Chikungunya",
+  "source": "https://dadosabertos.saude.gov.br/dataset/arboviroses-febre-de-chikungunya",
+  "snapshot_date": "2026-07-04",
+  "schema_reference": "dengue_manifest.json",
+  "years": {
+    "2017": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR17.csv.zip",
+      "sha256": "b3bc5d74eb0f094f1da46432b20c64104605cdbf6ddd431d6d5a43894a7e4f87",
+      "size_bytes": 5829097,
+      "raw_rows": 247662,
+      "raw_columns": 116,
+      "accepted_rows": 225979,
+      "positive_rows": 166345,
+      "negative_rows": 59634,
+      "class_counts": {
+        "": 21633,
+        "1": 22,
+        "2": 12,
+        "5": 59634,
+        "8": 16,
+        "13": 166345
+      }
+    },
+    "2018": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR18.csv.zip",
+      "sha256": "620b14685a79864b8b6e2b6c3b2114cab686547aa354378504e2ffc211356326",
+      "size_bytes": 2836698,
+      "raw_rows": 118779,
+      "raw_columns": 116,
+      "accepted_rows": 105249,
+      "positive_rows": 74562,
+      "negative_rows": 30687,
+      "class_counts": {
+        "": 13530,
+        "5": 30687,
+        "13": 74562
+      }
+    },
+    "2019": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR19.csv.zip",
+      "sha256": "1f225c6c8f2909e0c21cdb1c274d76cd35656495ebdd533bb985c9fb7b87df99",
+      "size_bytes": 4241146,
+      "raw_rows": 178147,
+      "raw_columns": 116,
+      "accepted_rows": 149927,
+      "positive_rows": 103579,
+      "negative_rows": 46348,
+      "class_counts": {
+        "": 28218,
+        "5": 46348,
+        "8": 1,
+        "10": 1,
+        "13": 103579
+      }
+    },
+    "2020": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR20.csv.zip",
+      "sha256": "64c18e9d71fff1539fd9df00392ceb0e8bd659701250d9ef5802b23f3f6df3b8",
+      "size_bytes": 2631366,
+      "raw_rows": 102496,
+      "raw_columns": 116,
+      "accepted_rows": 72471,
+      "positive_rows": 43973,
+      "negative_rows": 28498,
+      "class_counts": {
+        "": 30025,
+        "5": 28498,
+        "13": 43973
+      }
+    },
+    "2021": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR21.csv.zip",
+      "sha256": "f1a9e2caeb25722bb5d5f28b11f9f5f372677884aaaf7981216d89c639602355",
+      "size_bytes": 3622374,
+      "raw_rows": 128991,
+      "raw_columns": 122,
+      "accepted_rows": 110854,
+      "positive_rows": 69195,
+      "negative_rows": 41659,
+      "class_counts": {
+        "": 18133,
+        "!Ã¶": 1,
+        "5": 41659,
+        "8": 1,
+        "13": 69195,
+        "H0": 1,
+        "Â­Â": 1
+      }
+    },
+    "2022": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR22.csv.zip",
+      "sha256": "a9bbe83fb7afa00e74037283d88e9f8025e28ebe9309ef88f257491cc8746a32",
+      "size_bytes": 7936432,
+      "raw_rows": 274331,
+      "raw_columns": 122,
+      "accepted_rows": 248073,
+      "positive_rows": 148575,
+      "negative_rows": 99498,
+      "class_counts": {
+        "": 26069,
+        "0": 74,
+        "1": 2,
+        "2": 1,
+        "5": 99579,
+        "8": 1,
+        "13": 148605
+      }
+    },
+    "2023": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR23.csv.zip",
+      "sha256": "26717439064f1d0c28874e30548d4e95cda946d21924a7e2d55ab1425a6f4e3f",
+      "size_bytes": 6189039,
+      "raw_rows": 266442,
+      "raw_columns": 122,
+      "accepted_rows": 238161,
+      "positive_rows": 130158,
+      "negative_rows": 108003,
+      "class_counts": {
+        "": 27817,
+        "0": 385,
+        "5": 108044,
+        "13": 130196
+      }
+    },
+    "2024": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR24.csv.zip",
+      "sha256": "382239dee3cebe2fb21efaaa2e4c6513391b1dbdb3ddfdf3b51d407da44ae0ee",
+      "size_bytes": 10240422,
+      "raw_rows": 426214,
+      "raw_columns": 122,
+      "accepted_rows": 393413,
+      "positive_rows": 231612,
+      "negative_rows": 161801,
+      "class_counts": {
+        "": 31991,
+        "5": 162176,
+        "13": 232047
+      }
+    },
+    "2025": {
+      "url": "https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SINAN/Chikungunya/csv/CHIKBR25.csv.zip",
+      "sha256": "8c49351839bbec39d2d00c6cc9135715063cc6eff3045674f0c79df40d1f257a",
+      "size_bytes": 6338042,
+      "raw_rows": 253674,
+      "raw_columns": 122,
+      "accepted_rows": 235703,
+      "positive_rows": 109812,
+      "negative_rows": 125891,
+      "class_counts": {
+        "": 16281,
+        "0": 48,
+        "5": 126871,
+        "8": 1,
+        "13": 110473
+      }
+    }
+  }
+}

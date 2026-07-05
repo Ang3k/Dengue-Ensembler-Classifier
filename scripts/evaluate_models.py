@@ -36,29 +36,24 @@ from dengue_pipeline.datasets import (  # noqa: E402
     load_ml_years,
     split_features_target,
 )
+from dengue_pipeline.diseases import get_disease_config  # noqa: E402
 from dengue_pipeline.features import (  # noqa: E402
     FEATURE_SCHEMA_VERSION,
     MODEL_FEATURE_COLUMNS,
 )
 from dengue_pipeline.paths import (  # noqa: E402
-    ENSEMBLE_CONFIG_PATH,
-    EXPECTED_SPLIT_ROWS,
-    MODEL_FIGURES_DIR,
-    MODEL_MANIFEST_PATH,
-    MODELS_DIR,
-    TEST_YEARS,
-    TRAIN_YEARS,
-    VALIDATION_YEARS,
+    disease_ensemble_config_path,
+    disease_model_figures_dir,
+    disease_model_manifest_path,
+    disease_models_dir,
 )
 
 
-METRICS_DIR = PROJECT_ROOT / "reports" / "metrics" / "modeling"
 MODEL_FILES = {
     "mlp": "mlp.joblib",
     "xgboost": "xgboost.joblib",
     "lightgbm": "lightgbm.joblib",
 }
-EVALUATION_FIGURES_DIR = MODEL_FIGURES_DIR / "evaluation"
 
 
 def positive_probability(model, features: pd.DataFrame) -> np.ndarray:
@@ -132,10 +127,10 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_models(manifest: dict) -> dict:
+def load_models(manifest: dict, models_dir: Path) -> dict:
     loaded = {}
     for name, filename in MODEL_FILES.items():
-        path = MODELS_DIR / filename
+        path = models_dir / filename
         entry = manifest.get("models", {}).get(name, {})
         if entry.get("file") != filename:
             raise RuntimeError(f"{name} filename differs from model manifest")
@@ -158,17 +153,24 @@ def save_evaluation_figures(
     confusion_rows: pd.DataFrame,
     curve_scores: dict[str, np.ndarray],
     y_test: np.ndarray,
+    evaluation_figures_dir: Path,
+    validation_year: int,
+    test_year: int,
 ) -> None:
-    EVALUATION_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    evaluation_figures_dir.mkdir(parents=True, exist_ok=True)
 
     metric_names = ["precision", "recall", "f1", "roc_auc", "pr_auc"]
     comparison = test_metrics.set_index("model")[metric_names]
     ax = comparison.plot.bar(figsize=(11, 6), ylim=(0, 1))
-    ax.set(title="Métricas no teste final de 2021", xlabel="", ylabel="Valor")
+    ax.set(
+        title=f"Métricas no teste final de {test_year}",
+        xlabel="",
+        ylabel="Valor",
+    )
     ax.legend(loc="lower right", ncol=2)
     plt.tight_layout()
     plt.savefig(
-        EVALUATION_FIGURES_DIR / "model_metrics_comparison.png",
+        evaluation_figures_dir / "model_metrics_comparison.png",
         dpi=160,
     )
     plt.close()
@@ -182,10 +184,13 @@ def save_evaluation_figures(
         selected["f1"],
         color="black",
         zorder=5,
-        label="selecionado em 2020",
+        label=f"selecionado em {validation_year}",
     )
     ax.set(
-        title="Seleção de limiar exclusivamente na validação de 2020",
+        title=(
+            "Seleção de limiar exclusivamente na validação de "
+            f"{validation_year}"
+        ),
         xlabel="Limiar",
         ylabel="F1",
         ylim=(0, 1),
@@ -193,7 +198,7 @@ def save_evaluation_figures(
     ax.legend()
     plt.tight_layout()
     plt.savefig(
-        EVALUATION_FIGURES_DIR / "threshold_analysis.png",
+        evaluation_figures_dir / "threshold_analysis.png",
         dpi=160,
     )
     plt.close()
@@ -219,7 +224,7 @@ def save_evaluation_figures(
                 )
     plt.tight_layout()
     plt.savefig(
-        EVALUATION_FIGURES_DIR / "confusion_matrices.png",
+        evaluation_figures_dir / "confusion_matrices.png",
         dpi=160,
     )
     plt.close()
@@ -230,13 +235,13 @@ def save_evaluation_figures(
         ax.plot(false_positive, true_positive, label=name)
     ax.plot([0, 1], [0, 1], linestyle="--", color="grey")
     ax.set(
-        title="Curvas ROC no teste final de 2021",
+        title=f"Curvas ROC no teste final de {test_year}",
         xlabel="Taxa de falsos positivos",
         ylabel="Taxa de verdadeiros positivos",
     )
     ax.legend()
     plt.tight_layout()
-    plt.savefig(EVALUATION_FIGURES_DIR / "roc_curves.png", dpi=160)
+    plt.savefig(evaluation_figures_dir / "roc_curves.png", dpi=160)
     plt.close()
 
     fig, ax = plt.subplots(figsize=(8, 7))
@@ -244,14 +249,14 @@ def save_evaluation_figures(
         precision, recall, _ = precision_recall_curve(y_test, scores)
         ax.plot(recall, precision, label=name)
     ax.set(
-        title="Curvas precisão-recall no teste final de 2021",
+        title=f"Curvas precisão-recall no teste final de {test_year}",
         xlabel="Recall",
         ylabel="Precisão",
     )
     ax.legend()
     plt.tight_layout()
     plt.savefig(
-        EVALUATION_FIGURES_DIR / "precision_recall_curves.png",
+        evaluation_figures_dir / "precision_recall_curves.png",
         dpi=160,
     )
     plt.close()
@@ -259,7 +264,12 @@ def save_evaluation_figures(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Calibrate on 2020 and evaluate once on 2021."
+        description="Calibrate and evaluate one arbovirus model set."
+    )
+    parser.add_argument(
+        "--disease",
+        choices=("dengue", "chikungunya"),
+        default="dengue",
     )
     parser.add_argument("--threshold-step", type=float, default=0.01)
     parser.add_argument(
@@ -272,27 +282,42 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    config = get_disease_config(args.disease)
+    models_dir = disease_models_dir(config.name)
+    model_manifest_path = disease_model_manifest_path(config.name)
+    ensemble_config_path = disease_ensemble_config_path(config.name)
+    metrics_dir = PROJECT_ROOT / "reports" / "metrics" / "modeling"
+    if config.name != "dengue":
+        metrics_dir /= config.name
+    evaluation_figures_dir = (
+        disease_model_figures_dir(config.name) / "evaluation"
+    )
     if args.ensemble_threshold is not None and not 0 < args.ensemble_threshold < 1:
         parser.error("--ensemble-threshold deve estar entre 0 e 1")
 
     manifest = json.loads(
-        MODEL_MANIFEST_PATH.read_text(encoding="utf-8")
+        model_manifest_path.read_text(encoding="utf-8")
     )
     if (
+        manifest.get("disease", "dengue") != config.name
+        or
         manifest.get("feature_schema_version") != FEATURE_SCHEMA_VERSION
         or manifest.get("feature_columns") != list(MODEL_FEATURE_COLUMNS)
         or manifest.get("periods")
         != {
-            "train": list(TRAIN_YEARS),
-            "validation": list(VALIDATION_YEARS),
-            "test": list(TEST_YEARS),
+            "train": list(config.train_years),
+            "validation": list(config.validation_years),
+            "test": list(config.test_years),
         }
-        or manifest.get("row_counts") != EXPECTED_SPLIT_ROWS
+        or manifest.get("row_counts") != config.expected_split_rows
     ):
         raise RuntimeError("Model manifest feature schema is incompatible")
 
-    validation_dataset = load_ml_years(VALIDATION_YEARS)
-    if len(validation_dataset) != EXPECTED_SPLIT_ROWS["validation"]:
+    validation_dataset = load_ml_years(
+        config.validation_years,
+        config.name,
+    )
+    if len(validation_dataset) != config.expected_split_rows["validation"]:
         raise RuntimeError("Validation dataset row count is not official")
     X_validation, y_validation = split_features_target(validation_dataset)
     thresholds = np.arange(
@@ -301,7 +326,7 @@ def main() -> None:
         args.threshold_step,
     ).round(4)
 
-    models = load_models(manifest)
+    models = load_models(manifest, models_dir)
     validation_scores = {
         name: positive_probability(model, X_validation)
         for name, model in models.items()
@@ -382,22 +407,23 @@ def main() -> None:
     )
 
     ensemble_config = {
+        "disease": config.name,
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
-        "selection_period": list(VALIDATION_YEARS),
-        "test_period": list(TEST_YEARS),
+        "selection_period": list(config.validation_years),
+        "test_period": list(config.test_years),
         "threshold_rule": threshold_rule,
         "weight_rule": "normalized_validation_recall",
         "threshold": ensemble_threshold,
         "weights": weights,
-        "model_manifest_sha256": file_sha256(MODEL_MANIFEST_PATH),
+        "model_manifest_sha256": file_sha256(model_manifest_path),
     }
 
-    # Only after every decision is frozen do we open the final 2021 test set.
+    # Only after every decision is frozen do we open the final test set.
     del validation_dataset, X_validation, y_validation
     del validation_scores, ensemble_validation
     gc.collect()
-    test_dataset = load_ml_years(TEST_YEARS)
-    if len(test_dataset) != EXPECTED_SPLIT_ROWS["test"]:
+    test_dataset = load_ml_years(config.test_years, config.name)
+    if len(test_dataset) != config.expected_split_rows["test"]:
         raise RuntimeError("Test dataset row count is not official")
     X_test, y_test = split_features_target(test_dataset)
     test_scores = {
@@ -464,35 +490,35 @@ def main() -> None:
                 }
             )
 
-    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
     pd.concat(validation_frames, ignore_index=True).to_csv(
-        METRICS_DIR / "threshold_metrics.csv",
+        metrics_dir / "threshold_metrics.csv",
         index=False,
     )
     pd.DataFrame(selected_rows).to_csv(
-        METRICS_DIR / "selected_thresholds.csv",
+        metrics_dir / "selected_thresholds.csv",
         index=False,
     )
     test_metrics_frame = pd.DataFrame(test_metric_rows)
     test_metrics_frame.to_csv(
-        METRICS_DIR / "model_metrics.csv",
+        metrics_dir / "model_metrics.csv",
         index=False,
     )
     confusion_frame = pd.DataFrame(confusion_rows)
     confusion_frame.to_csv(
-        METRICS_DIR / "confusion_matrices.csv",
+        metrics_dir / "confusion_matrices.csv",
         index=False,
     )
     pd.DataFrame(classification_rows).to_csv(
-        METRICS_DIR / "classification_report.csv",
+        metrics_dir / "classification_report.csv",
         index=False,
     )
     pd.DataFrame(
         [
             {
                 "split": "test",
-                "period_start": "2021-01",
-                "period_end": "2021-12",
+                "period_start": f"{config.test_years[0]}-01",
+                "period_end": f"{config.test_years[-1]}-12",
                 "n_samples": len(y_test),
                 "n_features": X_test.shape[1],
                 "n_confirmed": int(y_test.sum()),
@@ -500,23 +526,26 @@ def main() -> None:
                 "positive_rate": float(y_test.mean()),
             }
         ]
-    ).to_csv(METRICS_DIR / "test_set_summary.csv", index=False)
+    ).to_csv(metrics_dir / "test_set_summary.csv", index=False)
 
-    temporary = ENSEMBLE_CONFIG_PATH.with_suffix(".json.part")
+    temporary = ensemble_config_path.with_suffix(".json.part")
     temporary.write_text(
         json.dumps(ensemble_config, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    temporary.replace(ENSEMBLE_CONFIG_PATH)
+    temporary.replace(ensemble_config_path)
     save_evaluation_figures(
         pd.concat(validation_frames, ignore_index=True),
         test_metrics_frame,
         confusion_frame,
         {**test_scores, "ensemble": ensemble_test},
         y_test.to_numpy(),
+        evaluation_figures_dir,
+        config.validation_years[0],
+        config.test_years[0],
     )
     print(test_metrics_frame.to_string(index=False))
-    print(f"Ensemble configuration written to {ENSEMBLE_CONFIG_PATH}")
+    print(f"Ensemble configuration written to {ensemble_config_path}")
 
 
 if __name__ == "__main__":

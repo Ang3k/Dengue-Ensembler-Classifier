@@ -20,6 +20,7 @@ from dengue_pipeline.features import (
     build_local_density_lookup,
     compute_local_positivity,
 )
+from dengue_pipeline.diseases import select_disease
 from dengue_pipeline.paths import (
     DENGUE_YEARS,
     RAW_DOWNLOAD_DIR,
@@ -95,6 +96,22 @@ class ClassificationMappingTestCase(unittest.TestCase):
                 self.assertEqual(mapped.iloc[:3].tolist(), [1, 1, 1])
                 self.assertEqual(mapped.iloc[3], 0)
                 self.assertTrue(mapped.iloc[4:].isna().all())
+
+    def test_chikungunya_mapping_and_exclusive_selection(self):
+        raw = pd.Series([13, 5, 10, 11, 12, 0, 8, None])
+        mapped = harmonize_final_classification(
+            raw,
+            2025,
+            "chikungunya",
+        )
+        self.assertEqual(mapped.iloc[:2].tolist(), [1, 0])
+        self.assertTrue(mapped.iloc[2:].isna().all())
+        self.assertEqual(select_disease(1, 0), "dengue")
+        self.assertEqual(select_disease(0, 1), "chikungunya")
+        with self.assertRaises(ValueError):
+            select_disease(1, 1)
+        with self.assertRaises(ValueError):
+            select_disease(0, 0)
 
 
 class FeatureSchemaTestCase(unittest.TestCase):
@@ -217,12 +234,12 @@ class TemporalAndManifestTestCase(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertNotIn(
-            "load_ml_years(TEST_YEARS)",
+            "load_ml_years(config.test_years",
             training_source,
         )
         config_position = evaluation_source.index("ensemble_config = {")
         test_load_position = evaluation_source.index(
-            "test_dataset = load_ml_years(TEST_YEARS)"
+            "test_dataset = load_ml_years(config.test_years"
         )
         self.assertLess(config_position, test_load_position)
 

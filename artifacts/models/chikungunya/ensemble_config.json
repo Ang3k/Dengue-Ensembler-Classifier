@@ -1,0 +1,19 @@
+{
+  "disease": "chikungunya",
+  "feature_schema_version": "2.2.0",
+  "selection_period": [
+    2024
+  ],
+  "test_period": [
+    2025
+  ],
+  "threshold_rule": "manual_operating_point",
+  "weight_rule": "normalized_validation_recall",
+  "threshold": 0.2,
+  "weights": {
+    "mlp": 0.3314296664133539,
+    "xgboost": 0.33424176515290477,
+    "lightgbm": 0.3343285684337412
+  },
+  "model_manifest_sha256": "4620c95e8c62273e744bd2ea59f999d40f67d43673aa6bf6e517e7c048caa6bf"
+}

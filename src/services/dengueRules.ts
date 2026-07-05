@@ -13,12 +13,17 @@ export type ModelPrediction = {
   weight: number;
 };
 
+export type Disease = "dengue" | "chikungunya";
+
 export type EvaluationResult = {
+  disease: Disease;
   models: ModelPrediction[];
   average: number;
   threshold: number;
   weighting: "recall";
+  isPositive: boolean;
   isDengue: boolean;
+  isChikungunya: boolean;
 };
 
 export type PredictionPayload = Record<string, string | number | null>;
@@ -171,7 +176,8 @@ function mensagemErroApi(errorBody: unknown, status: number): string {
 
 export function montarPayload(
   selectedIds: string[],
-  patientData: PatientData
+  patientData: PatientData,
+  disease: Disease = "dengue"
 ): PredictionPayload {
   const sintomas: PredictionPayload = {};
   for (const item of triageItems) {
@@ -179,6 +185,7 @@ export function montarPayload(
   }
 
   return {
+    disease,
     age_years: numberOrNull(patientData.ageYears),
     sex: patientData.sex || null,
     pregnancy_status: numberOrNull(patientData.pregnancyStatus),
@@ -237,6 +244,10 @@ export async function solicitarPredicao(
     typeof (data as EvaluationResult).average !== "number" ||
     typeof (data as EvaluationResult).threshold !== "number" ||
     (data as EvaluationResult).weighting !== "recall" ||
+    !["dengue", "chikungunya"].includes(
+      (data as EvaluationResult).disease
+    ) ||
+    typeof (data as EvaluationResult).isPositive !== "boolean" ||
     typeof (data as EvaluationResult).isDengue !== "boolean"
   ) {
     throw new Error("A API retornou uma resposta inválida.");
@@ -286,6 +297,8 @@ export async function solicitarSimulacaoRandom(
     typeof prediction.average !== "number" ||
     typeof prediction.threshold !== "number" ||
     prediction.weighting !== "recall" ||
+    prediction.disease !== "dengue" ||
+    typeof prediction.isPositive !== "boolean" ||
     typeof prediction.isDengue !== "boolean"
   ) {
     throw new Error("A API retornou uma resposta inválida.");
@@ -310,5 +323,29 @@ export function avaliarDengue(
     );
   }
 
-  return solicitarPredicao(montarPayload(selectedIds, patientData));
+  return solicitarPredicao(
+    montarPayload(selectedIds, patientData, "dengue")
+  );
+}
+
+export function avaliarDoenca(
+  disease: Disease,
+  selectedIds: string[],
+  patientData: PatientData
+): Promise<EvaluationResult> {
+  if (
+    patientData.notificationDate &&
+    patientData.symptomOnsetDate &&
+    patientData.notificationDate < patientData.symptomOnsetDate
+  ) {
+    return Promise.reject(
+      new Error(
+        "A data da notificação não pode ser anterior ao início dos sintomas."
+      )
+    );
+  }
+
+  return solicitarPredicao(
+    montarPayload(selectedIds, patientData, disease)
+  );
 }

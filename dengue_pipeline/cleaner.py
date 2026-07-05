@@ -11,6 +11,7 @@ from .features import (
     SYMPTOM_COLUMNS,
     build_ml_dataset,
 )
+from .diseases import get_disease_config
 from .paths import PROJECT_ROOT
 from .sinan_mappings import (
     BINARY_CLASSIFICATION_LABELS,
@@ -26,6 +27,7 @@ from .sinan_mappings import (
 
 LEGACY_POSITIVE_CLASSIFICATIONS = frozenset({1, 2, 3, 4, 10, 11, 12})
 MODERN_POSITIVE_CLASSIFICATIONS = frozenset({10, 11, 12})
+CHIKUNGUNYA_POSITIVE_CLASSIFICATIONS = frozenset({13})
 NEGATIVE_CLASSIFICATIONS = frozenset({5})
 IGNORED_CLASSIFICATIONS = frozenset({0, 8, 9})
 
@@ -96,7 +98,15 @@ ANALYSIS_COLUMNS = (
 )
 
 
-def positive_classifications_for_year(year: int) -> frozenset[int]:
+def positive_classifications_for_year(
+    year: int,
+    disease: str = "dengue",
+) -> frozenset[int]:
+    disease = get_disease_config(disease).name
+    if disease == "chikungunya":
+        if year in get_disease_config(disease).years:
+            return CHIKUNGUNYA_POSITIVE_CLASSIFICATIONS
+        raise ValueError(f"Unsupported chikungunya source year: {year}")
     if 2014 <= year <= 2016:
         return LEGACY_POSITIVE_CLASSIFICATIONS
     if 2017 <= year <= 2021:
@@ -107,9 +117,10 @@ def positive_classifications_for_year(year: int) -> frozenset[int]:
 def harmonize_final_classification(
     values: pd.Series,
     source_year: int,
+    disease: str = "dengue",
 ) -> pd.Series:
     numeric = pd.to_numeric(values, errors="coerce")
-    positives = positive_classifications_for_year(source_year)
+    positives = positive_classifications_for_year(source_year, disease)
     result = pd.Series(pd.NA, index=values.index, dtype="Int8")
     result.loc[numeric.isin(NEGATIVE_CLASSIFICATIONS)] = 0
     result.loc[numeric.isin(positives)] = 1
@@ -175,8 +186,10 @@ class DengueDataCleaner:
     def transformar_analise_chunk(
         raw_frame: pd.DataFrame,
         source_year: int,
+        disease: str = "dengue",
     ) -> pd.DataFrame:
-        positive_classifications_for_year(source_year)
+        disease = get_disease_config(disease).name
+        positive_classifications_for_year(source_year, disease)
         raw_frame = raw_frame.copy()
         raw_frame.columns = raw_frame.columns.astype(str).str.upper()
         frame = standardize_columns(raw_frame)
@@ -188,10 +201,26 @@ class DengueDataCleaner:
                 f"{sorted(missing)}"
             )
 
+        if disease == "chikungunya":
+            source_epi_year = _numeric(
+                frame,
+                "notification_epi_week",
+            ).floordiv(100)
+            source_mask = source_epi_year.eq(source_year)
+            if "duplicate_flag" in frame:
+                duplicate = (
+                    _numeric(frame, "duplicate_flag")
+                    .eq(2)
+                    .fillna(False)
+                )
+                source_mask &= ~duplicate
+            frame = frame.loc[source_mask].copy()
+
         target_code = _numeric(frame, "final_classification")
         target = harmonize_final_classification(
             frame["final_classification"],
             source_year,
+            disease,
         )
         valid = target.notna()
         frame = frame.loc[valid].copy()
@@ -306,6 +335,7 @@ class DengueDataCleaner:
         self,
         raw_frame: pd.DataFrame | None = None,
         source_year: int | None = None,
+        disease: str = "dengue",
     ) -> pd.DataFrame:
         if raw_frame is None:
             raw_frame = self.carregar()
@@ -317,7 +347,11 @@ class DengueDataCleaner:
             if len(years) != 1:
                 raise ValueError("source_year is required for mixed-year data")
             source_year = int(years[0])
-        return self.transformar_analise_chunk(raw_frame, source_year)
+        return self.transformar_analise_chunk(
+            raw_frame,
+            source_year,
+            disease,
+        )
 
     @staticmethod
     def salvar_df(df: pd.DataFrame, caminho_saida: str | Path) -> None:
@@ -330,6 +364,7 @@ class DengueDataCleaner:
 
 __all__ = [
     "ANALYSIS_COLUMNS",
+    "CHIKUNGUNYA_POSITIVE_CLASSIFICATIONS",
     "DATASET_METADATA_COLUMNS",
     "DengueDataCleaner",
     "IGNORED_CLASSIFICATIONS",

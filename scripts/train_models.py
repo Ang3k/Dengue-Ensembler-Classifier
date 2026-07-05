@@ -23,6 +23,7 @@ from dengue_pipeline.datasets import (  # noqa: E402
     load_ml_years,
     split_features_target,
 )
+from dengue_pipeline.diseases import get_disease_config  # noqa: E402
 from dengue_pipeline.features import (  # noqa: E402
     FEATURE_SCHEMA_VERSION,
     MODEL_FEATURE_COLUMNS,
@@ -32,18 +33,14 @@ from dengue_pipeline.models import (  # noqa: E402
     MLPDiseaseClassifier,
 )
 from dengue_pipeline.paths import (  # noqa: E402
-    EXPECTED_SPLIT_ROWS,
-    LOCAL_DENSITY_LOOKUP_PATH,
-    LOCAL_POSITIVITY_LOOKUP_PATH,
-    MODEL_FIGURES_DIR,
-    MODEL_MANIFEST_PATH,
-    MODELS_DIR,
-    TRAIN_YEARS,
-    VALIDATION_YEARS,
+    disease_local_density_lookup_path,
+    disease_local_positivity_lookup_path,
+    disease_model_figures_dir,
+    disease_model_manifest_path,
+    disease_models_dir,
 )
 
 
-DATA_MANIFEST_PATH = PROJECT_ROOT / "data" / "dengue_manifest.json"
 MAX_TRAINING_RSS_GIB = 28.0
 
 
@@ -85,18 +82,26 @@ def atomic_joblib_dump(model, destination: Path) -> None:
     temporary.replace(destination)
 
 
-def save_feature_importance(name: str, importance) -> None:
-    MODEL_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+def save_feature_importance(
+    name: str,
+    importance,
+    figures_dir: Path,
+    validation_year: int,
+) -> None:
+    figures_dir.mkdir(parents=True, exist_ok=True)
     top = importance.head(30).sort_values()
     ax = top.plot.barh(figsize=(10, 8))
     ax.set(
-        title=f"{name.upper()} — 30 features mais importantes (2020)",
+        title=(
+            f"{name.upper()} — 30 features mais importantes "
+            f"({validation_year})"
+        ),
         xlabel="Importância",
         ylabel="",
     )
     plt.tight_layout()
     plt.savefig(
-        MODEL_FIGURES_DIR / f"{name}_feature_importance.png",
+        figures_dir / f"{name}_feature_importance.png",
         dpi=160,
     )
     plt.close()
@@ -104,7 +109,12 @@ def save_feature_importance(name: str, importance) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Train dengue models with the 2017-2020 temporal split."
+        description="Train one arbovirus model set with a temporal split."
+    )
+    parser.add_argument(
+        "--disease",
+        choices=("dengue", "chikungunya"),
+        default="dengue",
     )
     parser.add_argument("--n-trials", type=int, default=50)
     parser.add_argument("--max-epochs", type=int, default=150)
@@ -136,35 +146,53 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    config = get_disease_config(args.disease)
+    models_dir = disease_models_dir(config.name)
+    figures_dir = disease_model_figures_dir(config.name)
+    model_manifest_path = disease_model_manifest_path(config.name)
+    local_density_lookup_path = disease_local_density_lookup_path(
+        config.name
+    )
+    local_positivity_lookup_path = disease_local_positivity_lookup_path(
+        config.name
+    )
+    data_manifest_path = (
+        PROJECT_ROOT / "data" / f"{config.name}_manifest.json"
+    )
     mlp_hidden = tuple(int(size) for size in args.mlp_hidden.split(",") if size)
 
     memory_monitor = PeakMemoryMonitor()
     memory_monitor.start()
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    print("Loading training years:", TRAIN_YEARS, flush=True)
-    train_dataset = load_ml_years(TRAIN_YEARS)
-    print("Loading validation years:", VALIDATION_YEARS, flush=True)
-    validation_dataset = load_ml_years(VALIDATION_YEARS)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    print("Disease:", config.name, flush=True)
+    print("Loading training years:", config.train_years, flush=True)
+    train_dataset = load_ml_years(config.train_years, config.name)
+    print("Loading validation years:", config.validation_years, flush=True)
+    validation_dataset = load_ml_years(
+        config.validation_years,
+        config.name,
+    )
 
     X_train, y_train = split_features_target(train_dataset)
     X_validation, y_validation = split_features_target(validation_dataset)
     if X_train["local_density"].isna().all() or X_train["local_positivity"].isna().all():
         raise RuntimeError(
             "local_density/local_positivity estão vazias. Rode "
-            "scripts/augment_local_density.py depois de prepare_dengue_data.py "
+            "scripts/augment_local_density.py --disease "
+            f"{config.name} depois do ETL "
             "e antes de treinar."
         )
     train_rows = len(train_dataset)
     validation_rows = len(validation_dataset)
-    if train_rows != EXPECTED_SPLIT_ROWS["train"]:
+    if train_rows != config.expected_split_rows["train"]:
         raise RuntimeError(
             f"Training row count mismatch: {train_rows:,} != "
-            f"{EXPECTED_SPLIT_ROWS['train']:,}"
+            f"{config.expected_split_rows['train']:,}"
         )
-    if validation_rows != EXPECTED_SPLIT_ROWS["validation"]:
+    if validation_rows != config.expected_split_rows["validation"]:
         raise RuntimeError(
             f"Validation row count mismatch: {validation_rows:,} != "
-            f"{EXPECTED_SPLIT_ROWS['validation']:,}"
+            f"{config.expected_split_rows['validation']:,}"
         )
     del train_dataset, validation_dataset
     gc.collect()
@@ -200,7 +228,7 @@ def main() -> None:
         X_validation=X_validation,
         y_validation=y_validation,
     )
-    atomic_joblib_dump(models["mlp"], MODELS_DIR / "mlp.joblib")
+    atomic_joblib_dump(models["mlp"], models_dir / "mlp.joblib")
     save_feature_importance(
         "mlp",
         models["mlp"].permutation_feature_importance(
@@ -209,6 +237,8 @@ def main() -> None:
             sample_size=2_000,
             n_repeats=3,
         ),
+        figures_dir,
+        config.validation_years[0],
     )
 
     for name in ("xgboost", "lightgbm"):
@@ -221,8 +251,13 @@ def main() -> None:
             tuning_sample_size=args.tuning_sample_size,
             tuning_validation_size=args.tuning_sample_size,
         )
-        atomic_joblib_dump(models[name], MODELS_DIR / f"{name}.joblib")
-        save_feature_importance(name, models[name].feature_importance())
+        atomic_joblib_dump(models[name], models_dir / f"{name}.joblib")
+        save_feature_importance(
+            name,
+            models[name].feature_importance(),
+            figures_dir,
+            config.validation_years[0],
+        )
 
     peak_rss_gib = memory_monitor.stop()
     if peak_rss_gib >= MAX_TRAINING_RSS_GIB:
@@ -232,45 +267,46 @@ def main() -> None:
         )
 
     manifest = {
+        "disease": config.name,
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "feature_columns": list(MODEL_FEATURE_COLUMNS),
         "periods": {
-            "train": list(TRAIN_YEARS),
-            "validation": list(VALIDATION_YEARS),
-            "test": [2021],
+            "train": list(config.train_years),
+            "validation": list(config.validation_years),
+            "test": list(config.test_years),
         },
         "row_counts": {
             "train": train_rows,
             "validation": validation_rows,
-            "test": EXPECTED_SPLIT_ROWS["test"],
+            "test": config.expected_split_rows["test"],
         },
         "peak_training_rss_gib": round(peak_rss_gib, 3),
-        "data_manifest_sha256": file_sha256(DATA_MANIFEST_PATH),
+        "data_manifest_sha256": file_sha256(data_manifest_path),
         "models": {
             name: {
                 "file": f"{name}.joblib",
-                "sha256": file_sha256(MODELS_DIR / f"{name}.joblib"),
+                "sha256": file_sha256(models_dir / f"{name}.joblib"),
             }
             for name in models
         },
         "context_lookups": {
             "local_density": {
-                "file": LOCAL_DENSITY_LOOKUP_PATH.name,
-                "sha256": file_sha256(LOCAL_DENSITY_LOOKUP_PATH),
+                "file": local_density_lookup_path.name,
+                "sha256": file_sha256(local_density_lookup_path),
             },
             "local_positivity": {
-                "file": LOCAL_POSITIVITY_LOOKUP_PATH.name,
-                "sha256": file_sha256(LOCAL_POSITIVITY_LOOKUP_PATH),
+                "file": local_positivity_lookup_path.name,
+                "sha256": file_sha256(local_positivity_lookup_path),
             },
         },
     }
-    temporary = MODEL_MANIFEST_PATH.with_suffix(".json.part")
+    temporary = model_manifest_path.with_suffix(".json.part")
     temporary.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    temporary.replace(MODEL_MANIFEST_PATH)
-    print(f"Model manifest written to {MODEL_MANIFEST_PATH}")
+    temporary.replace(model_manifest_path)
+    print(f"Model manifest written to {model_manifest_path}")
 
 
 if __name__ == "__main__":

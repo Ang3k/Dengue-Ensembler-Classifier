@@ -2,8 +2,11 @@ import { useState } from "react";
 import CheckboxItem from "../components/CheckboxItem";
 import PatientForm from "../components/PatientForm";
 import Resultado from "../components/Resultado";
-import { avaliarDengue, triageItems } from "../services/dengueRules";
-import type { EvaluationResult } from "../services/dengueRules";
+import { avaliarDoenca, triageItems } from "../services/dengueRules";
+import type {
+  Disease,
+  EvaluationResult,
+} from "../services/dengueRules";
 import type { PatientData } from "../types/patient";
 
 const grupos = [
@@ -32,6 +35,7 @@ const estadoInicial: PatientData = {
 };
 
 function Triage() {
+  const [disease, setDisease] = useState<Disease>("dengue");
   const [patientData, setPatientData] = useState<PatientData>(estadoInicial);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [resultado, setResultado] = useState<EvaluationResult | null>(null);
@@ -49,7 +53,11 @@ function Triage() {
     setErro(null);
     setResultado(null);
     try {
-      const resultadoFinal = await avaliarDengue(selectedItems, patientData);
+      const resultadoFinal = await avaliarDoenca(
+        disease,
+        selectedItems,
+        patientData
+      );
       setResultado(resultadoFinal);
     } catch (error) {
       setErro(
@@ -65,12 +73,28 @@ function Triage() {
   return (
     <main className="container">
       <section className="card">
-        <h1>Triagem de Dengue</h1>
+        <h1>Triagem de {disease === "dengue" ? "Dengue" : "Chikungunya"}</h1>
         <p>
           Preencha os dados do paciente e marque os sintomas informados. O
           sistema fará uma triagem baseada nos campos disponíveis na notificação
-          de dengue do Sinan.
+          de {disease === "dengue" ? "dengue" : "chikungunya"} do Sinan.
         </p>
+
+        <div className="form-group">
+          <label htmlFor="disease">Doença avaliada</label>
+          <select
+            id="disease"
+            value={disease}
+            onChange={event => {
+              setDisease(event.target.value as Disease);
+              setResultado(null);
+              setErro(null);
+            }}
+          >
+            <option value="dengue">Dengue</option>
+            <option value="chikungunya">Chikungunya</option>
+          </select>
+        </div>
 
         <PatientForm patientData={patientData} setPatientData={setPatientData} />
 
@@ -107,13 +131,7 @@ function Triage() {
         {erro && <p style={{ color: "red", marginTop: "1rem" }}>{erro}</p>}
 
         {resultado && (
-          <Resultado
-            models={resultado.models}
-            average={resultado.average}
-            threshold={resultado.threshold}
-            weighting={resultado.weighting}
-            isDengue={resultado.isDengue}
-          />
+          <Resultado {...resultado} />
         )}
       </section>
     </main>

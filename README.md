@@ -1,6 +1,7 @@
 # Dengue Sense Classifier
 
-Aplicação full stack de apoio à triagem de dengue com dados públicos do SINAN.
+Aplicação full stack de apoio à triagem de dengue e chikungunya com dados
+públicos do SINAN.
 O projeto processa as notificações, constrói 107 features, treina três
 classificadores e disponibiliza o ensemble por uma API FastAPI e uma interface
 React.
@@ -157,6 +158,20 @@ python -m uvicorn api:app
 `/triagem`, `/pipeline` e `/graphics` para `index.html`.
 
 ## Pipeline completo
+
+O pipeline mantém dengue como padrão. Para chikungunya, os mesmos campos e as
+mesmas 107 features são usados em artefatos separados:
+
+```powershell
+python scripts/prepare_chikungunya_data.py
+python scripts/augment_local_density.py --disease chikungunya
+```
+
+Nos notebooks `models.ipynb` e `model_evaluation.ipynb`, selecione exatamente
+uma doença com `DENGUE = 1` ou `CHIKUNGUNYA = 1`. As combinações `0/0` e `1/1`
+são rejeitadas. O treino também pode ser iniciado diretamente com
+`python scripts/train_models.py --disease chikungunya`; a avaliação usa o mesmo
+argumento em `scripts/evaluate_models.py`.
 
 ### 1. Baixar, conferir e preparar
 
