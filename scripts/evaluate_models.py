@@ -12,6 +12,7 @@ import joblib
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import PercentFormatter
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
@@ -54,6 +55,45 @@ MODEL_FILES = {
     "xgboost": "xgboost.joblib",
     "lightgbm": "lightgbm.joblib",
 }
+
+MODEL_ORDER = ("mlp", "xgboost", "lightgbm", "ensemble")
+MODEL_LABELS = {
+    "mlp": "MLP",
+    "xgboost": "XGBoost",
+    "lightgbm": "LightGBM",
+    "ensemble": "Ensemble",
+}
+MODEL_COLORS = {
+    "mlp": "#2563EB",
+    "xgboost": "#0F766E",
+    "lightgbm": "#7C3AED",
+    "ensemble": "#DC2626",
+}
+
+
+def style_axis(axis, *, grid: bool = True) -> None:
+    for spine in axis.spines.values():
+        spine.set_visible(False)
+    axis.tick_params(axis="both", which="both", length=0, labelsize=11)
+    if grid:
+        axis.grid(
+            True,
+            color="#D8DEE8",
+            linestyle="--",
+            linewidth=0.8,
+            alpha=0.7,
+        )
+        axis.set_axisbelow(True)
+
+
+def save_figure(fig, destination: Path) -> None:
+    fig.savefig(
+        destination,
+        dpi=180,
+        bbox_inches="tight",
+        facecolor="white",
+    )
+    plt.close(fig)
 
 
 def positive_probability(model, features: pd.DataFrame) -> np.ndarray:
@@ -154,112 +194,319 @@ def save_evaluation_figures(
     curve_scores: dict[str, np.ndarray],
     y_test: np.ndarray,
     evaluation_figures_dir: Path,
+    disease_label: str,
     validation_year: int,
     test_year: int,
 ) -> None:
     evaluation_figures_dir.mkdir(parents=True, exist_ok=True)
 
-    metric_names = ["precision", "recall", "f1", "roc_auc", "pr_auc"]
-    comparison = test_metrics.set_index("model")[metric_names]
-    ax = comparison.plot.bar(figsize=(11, 6), ylim=(0, 1))
-    ax.set(
-        title=f"Métricas no teste final de {test_year}",
-        xlabel="",
-        ylabel="Valor",
+    plt.rcParams.update(
+        {
+            "font.family": "DejaVu Sans",
+            "axes.titleweight": "semibold",
+            "axes.labelsize": 12,
+            "figure.facecolor": "white",
+            "axes.facecolor": "white",
+        }
     )
-    ax.legend(loc="lower right", ncol=2)
-    plt.tight_layout()
-    plt.savefig(
+
+    metric_specs = (
+        ("accuracy", "Acurácia"),
+        ("balanced_accuracy", "Acurácia\nbalanceada"),
+        ("precision", "Precisão"),
+        ("recall", "Recall"),
+        ("f1", "F1-score"),
+        ("roc_auc", "ROC-AUC"),
+        ("pr_auc", "PR-AUC"),
+    )
+    indexed_metrics = test_metrics.set_index("model")
+    x_positions = np.arange(len(metric_specs))
+    bar_width = 0.19
+    fig, axis = plt.subplots(figsize=(14, 7))
+    for model_index, name in enumerate(MODEL_ORDER):
+        values = [indexed_metrics.loc[name, metric] for metric, _ in metric_specs]
+        positions = x_positions + (model_index - 1.5) * bar_width
+        bars = axis.bar(
+            positions,
+            values,
+            width=bar_width,
+            color=MODEL_COLORS[name],
+            label=MODEL_LABELS[name],
+            alpha=0.94,
+        )
+        for bar, value in zip(bars, values):
+            axis.text(
+                bar.get_x() + bar.get_width() / 2,
+                value + 0.014,
+                f"{value:.2f}",
+                ha="center",
+                va="bottom",
+                rotation=90,
+                fontsize=8.5,
+                color="#334155",
+            )
+    axis.set_xticks(x_positions, [label for _, label in metric_specs])
+    axis.set_ylim(0, 1.09)
+    axis.yaxis.set_major_formatter(PercentFormatter(1.0))
+    axis.set_ylabel("Resultado")
+    axis.set_title(
+        f"Comparação das métricas — {disease_label}",
+        fontsize=20,
+        pad=52,
+    )
+    axis.text(
+        0.5,
+        1.035,
+        f"Teste temporal final de {test_year}",
+        transform=axis.transAxes,
+        ha="center",
+        fontsize=11,
+        color="#64748B",
+    )
+    axis.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.14),
+        ncol=4,
+        frameon=False,
+        fontsize=11,
+    )
+    style_axis(axis)
+    fig.tight_layout()
+    save_figure(
+        fig,
         evaluation_figures_dir / "model_metrics_comparison.png",
-        dpi=160,
     )
-    plt.close()
 
-    selected = validation_metrics[validation_metrics["selected"]]
-    fig, ax = plt.subplots(figsize=(11, 6))
-    for name, group in validation_metrics.groupby("model"):
-        ax.plot(group["threshold"], group["f1"], label=name)
-    ax.scatter(
-        selected["threshold"],
-        selected["f1"],
-        color="black",
-        zorder=5,
-        label=f"selecionado em {validation_year}",
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10), sharex=True, sharey=True)
+    for axis, name in zip(axes.ravel(), MODEL_ORDER):
+        group = validation_metrics[validation_metrics["model"] == name]
+        selected = group[group["selected"]]
+        axis.plot(
+            group["threshold"],
+            group["precision"],
+            color="#2563EB",
+            linewidth=2.7,
+            label="Precisão",
+        )
+        axis.plot(
+            group["threshold"],
+            group["recall"],
+            color="#DC2626",
+            linewidth=2.7,
+            label="Recall",
+        )
+        axis.plot(
+            group["threshold"],
+            group["f1"],
+            color="#0F766E",
+            linewidth=2.7,
+            label="F1-score",
+        )
+        if not selected.empty:
+            selected_threshold = float(selected.iloc[0]["threshold"])
+            axis.axvline(
+                selected_threshold,
+                color="#94A3B8",
+                linestyle="--",
+                linewidth=1.4,
+            )
+            axis.text(
+                selected_threshold,
+                0.025,
+                f" {selected_threshold:.2f}",
+                rotation=90,
+                va="bottom",
+                ha="left",
+                fontsize=8.5,
+                color="#64748B",
+            )
+        axis.set_title(MODEL_LABELS[name], fontsize=15, pad=10)
+        axis.set_xlim(0, 1)
+        axis.set_ylim(0, 1.02)
+        axis.set_xlabel("Limiar")
+        axis.set_ylabel("Resultado")
+        style_axis(axis)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.94),
+        ncol=3,
+        frameon=False,
+        fontsize=11,
     )
-    ax.set(
-        title=(
-            "Seleção de limiar exclusivamente na validação de "
-            f"{validation_year}"
-        ),
-        xlabel="Limiar",
-        ylabel="F1",
-        ylim=(0, 1),
+    fig.suptitle(
+        f"Precisão, Recall e F1 por limiar — {disease_label}",
+        fontsize=20,
+        fontweight="semibold",
+        y=0.995,
     )
-    ax.legend()
-    plt.tight_layout()
-    plt.savefig(
-        evaluation_figures_dir / "threshold_analysis.png",
-        dpi=160,
+    fig.text(
+        0.5,
+        0.955,
+        f"Limiar definido exclusivamente na validação de {validation_year}",
+        ha="center",
+        fontsize=11,
+        color="#64748B",
     )
-    plt.close()
+    fig.tight_layout(rect=(0, 0, 1, 0.89))
+    save_figure(fig, evaluation_figures_dir / "threshold_analysis.png")
 
-    fig, axes = plt.subplots(2, 2, figsize=(10, 9))
-    for axis, name in zip(axes.ravel(), curve_scores):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 11))
+    image = None
+    for axis, name in zip(axes.ravel(), MODEL_ORDER):
         matrix = (
             confusion_rows[confusion_rows["model"] == name]
             .pivot(index="actual", columns="predicted", values="count")
             .reindex(index=[0, 1], columns=[0, 1], fill_value=0)
             .to_numpy()
         )
-        axis.imshow(matrix, cmap="Blues")
-        axis.set(title=name, xlabel="Predito", ylabel="Real")
+        row_totals = matrix.sum(axis=1, keepdims=True)
+        proportions = np.divide(
+            matrix,
+            row_totals,
+            out=np.zeros_like(matrix, dtype=float),
+            where=row_totals != 0,
+        )
+        image = axis.imshow(proportions, cmap="Blues", vmin=0, vmax=1)
+        axis.set_title(MODEL_LABELS[name], fontsize=15, pad=10)
+        axis.set_xticks([0, 1], ["Descartado", "Confirmado"])
+        axis.set_yticks([0, 1], ["Descartado", "Confirmado"])
+        axis.set_xlabel("Classe prevista")
+        axis.set_ylabel("Classe real")
         for row in range(2):
             for column in range(2):
+                proportion = proportions[row, column]
                 axis.text(
                     column,
                     row,
-                    f"{matrix[row, column]:,}",
+                    (
+                        f"{int(matrix[row, column]):,}".replace(",", ".")
+                        + f"\n({proportion:.1%})"
+                    ),
                     ha="center",
                     va="center",
+                    color="white" if proportion >= 0.52 else "#0F172A",
+                    fontsize=12,
+                    fontweight="semibold",
                 )
-    plt.tight_layout()
-    plt.savefig(
-        evaluation_figures_dir / "confusion_matrices.png",
-        dpi=160,
+        style_axis(axis, grid=False)
+    colorbar = fig.colorbar(
+        image,
+        ax=axes.ravel().tolist(),
+        fraction=0.028,
+        pad=0.035,
     )
-    plt.close()
+    colorbar.set_label("Proporção dentro da classe real", fontsize=11)
+    colorbar.ax.yaxis.set_major_formatter(PercentFormatter(1.0))
+    colorbar.outline.set_visible(False)
+    fig.suptitle(
+        f"Matrizes de confusão — {disease_label}",
+        fontsize=20,
+        fontweight="semibold",
+        y=0.985,
+    )
+    fig.text(
+        0.5,
+        0.945,
+        f"Teste temporal final de {test_year}",
+        ha="center",
+        fontsize=11,
+        color="#64748B",
+    )
+    fig.subplots_adjust(top=0.88, bottom=0.06, left=0.08, right=0.88, hspace=0.3)
+    save_figure(fig, evaluation_figures_dir / "confusion_matrices.png")
 
-    fig, ax = plt.subplots(figsize=(8, 7))
-    for name, scores in curve_scores.items():
+    metric_lookup = test_metrics.set_index("model")
+    fig, axis = plt.subplots(figsize=(10, 8))
+    for name in MODEL_ORDER:
+        scores = curve_scores[name]
         false_positive, true_positive, _ = roc_curve(y_test, scores)
-        ax.plot(false_positive, true_positive, label=name)
-    ax.plot([0, 1], [0, 1], linestyle="--", color="grey")
-    ax.set(
-        title=f"Curvas ROC no teste final de {test_year}",
-        xlabel="Taxa de falsos positivos",
-        ylabel="Taxa de verdadeiros positivos",
+        axis.plot(
+            false_positive,
+            true_positive,
+            color=MODEL_COLORS[name],
+            linewidth=3.0 if name == "ensemble" else 2.5,
+            label=(
+                f"{MODEL_LABELS[name]} "
+                f"(AUC = {metric_lookup.loc[name, 'roc_auc']:.3f})"
+            ),
+        )
+    axis.plot(
+        [0, 1],
+        [0, 1],
+        linestyle="--",
+        linewidth=1.5,
+        color="#94A3B8",
+        label="Aleatório",
     )
-    ax.legend()
-    plt.tight_layout()
-    plt.savefig(evaluation_figures_dir / "roc_curves.png", dpi=160)
-    plt.close()
+    axis.set_xlim(0, 1)
+    axis.set_ylim(0, 1.02)
+    axis.set_xlabel("Taxa de falsos positivos (1 − especificidade)")
+    axis.set_ylabel("Taxa de verdadeiros positivos (recall)")
+    fig.suptitle(
+        f"Curvas ROC — {disease_label}",
+        fontsize=20,
+        fontweight="semibold",
+        y=0.985,
+    )
+    axis.set_title(
+        f"Teste temporal final de {test_year}",
+        fontsize=11,
+        color="#64748B",
+        pad=14,
+    )
+    axis.legend(loc="lower right", frameon=False, fontsize=11)
+    style_axis(axis)
+    fig.tight_layout(rect=(0, 0, 1, 0.91))
+    save_figure(fig, evaluation_figures_dir / "roc_curves.png")
 
-    fig, ax = plt.subplots(figsize=(8, 7))
-    for name, scores in curve_scores.items():
+    fig, axis = plt.subplots(figsize=(10, 8))
+    for name in MODEL_ORDER:
+        scores = curve_scores[name]
         precision, recall, _ = precision_recall_curve(y_test, scores)
-        ax.plot(recall, precision, label=name)
-    ax.set(
-        title=f"Curvas precisão-recall no teste final de {test_year}",
-        xlabel="Recall",
-        ylabel="Precisão",
+        axis.plot(
+            recall,
+            precision,
+            color=MODEL_COLORS[name],
+            linewidth=3.0 if name == "ensemble" else 2.5,
+            label=(
+                f"{MODEL_LABELS[name]} "
+                f"(AP = {metric_lookup.loc[name, 'pr_auc']:.3f})"
+            ),
+        )
+    prevalence = float(np.mean(y_test))
+    axis.axhline(
+        prevalence,
+        color="#94A3B8",
+        linestyle="--",
+        linewidth=1.5,
+        label=f"Baseline ({prevalence:.1%})",
     )
-    ax.legend()
-    plt.tight_layout()
-    plt.savefig(
+    axis.set_xlim(0, 1)
+    axis.set_ylim(0, 1.02)
+    axis.set_xlabel("Recall")
+    axis.set_ylabel("Precisão")
+    fig.suptitle(
+        f"Curvas Precision-Recall — {disease_label}",
+        fontsize=20,
+        fontweight="semibold",
+        y=0.985,
+    )
+    axis.set_title(
+        f"Teste temporal final de {test_year}",
+        fontsize=11,
+        color="#64748B",
+        pad=14,
+    )
+    axis.legend(loc="lower left", frameon=False, fontsize=11)
+    style_axis(axis)
+    fig.tight_layout(rect=(0, 0, 1, 0.91))
+    save_figure(
+        fig,
         evaluation_figures_dir / "precision_recall_curves.png",
-        dpi=160,
     )
-    plt.close()
 
 
 def main() -> None:
@@ -541,6 +788,7 @@ def main() -> None:
         {**test_scores, "ensemble": ensemble_test},
         y_test.to_numpy(),
         evaluation_figures_dir,
+        config.label,
         config.validation_years[0],
         config.test_years[0],
     )
